@@ -1,30 +1,35 @@
-%% Demo for the Detail API (see DetailApi.m)
+%% Demo for the detailApi
+% to-do: first you need to customize the annFile and imgPath for your own path;
 
-%% initialize api (please specify dataType/annType below)
-annTypes = { 'instances', 'captions', 'person_keypoints' };
-dataType='val2014'; annType=annTypes{1}; % specify dataType/annType
-annFile=sprintf('../annotations/%s_%s.json',annType,dataType);
-detail=DetailApi(annFile);
+clear all; close all;
+%% initialize Pascal api (please specify dataType/annType below)
+annTypes = { 'instances'}; %, 'captions', 'person_keypoints' 
+annType=annTypes{1}; % specify dataType/annType % val
+
+annFile = '../../json/PASCAL_trainval.json';
+imgPath = '../../images';
+
+coco=DetailApi(annFile);
 
 %% display COCO categories and supercategories
 if( ~strcmp(annType,'captions') )
-  cats = detail.loadCats(detail.getCatIds());
-  nms={cats.name}; fprintf('COCO categories: ');
+  cats = coco.loadCats(coco.getCatIds());
+  nms={cats.name}; fprintf('categories: ');
   fprintf('%s, ',nms{:}); fprintf('\n');
-  nms=unique({cats.supercategory}); fprintf('COCO supercategories: ');
+  nms=unique({cats.supercategory}); fprintf('supercategories: ');
   fprintf('%s, ',nms{:}); fprintf('\n');
 end
 
 %% get all images containing given categories, select one at random
-catIds = detail.getCatIds('catNms',{'person','dog','skateboard'});
-imgIds = detail.getImgIds('catIds',catIds);
+catIds = coco.getCatIds('catNms',{'person'}); % ,'dog','skateboard'  dog horse
+imgIds = coco.getImgIds('catIds',catIds);
 imgId = imgIds(randi(length(imgIds)));
 
 %% load and display image
-img = detail.loadImgs(imgId);
-I = imread(sprintf('../images/%s/%s',dataType,img.file_name));
+img = coco.loadImgs(imgId);
+I = imread(sprintf([imgPath '/%s'], img.file_name));
 figure(1); imagesc(I); axis('image'); set(gca,'XTick',[],'YTick',[])
 
 %% load and display annotations
-annIds = detail.getAnnIds('imgIds',imgId,'catIds',catIds,'iscrowd',[]);
-anns = detail.loadAnns(annIds); detail.showAnns(anns);
+annIds = coco.getAnnIds('imgIds',imgId,'catIds',catIds,'iscrowd',[]);
+anns = coco.loadAnns(annIds); coco.showAnns(anns);
