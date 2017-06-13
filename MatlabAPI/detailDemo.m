@@ -1,6 +1,6 @@
-%% Demo for the CocoApi (see CocoApi.m)
+%% Demo for the Detail API (see DetailApi.m)
 
-%% initialize COCO api (please specify dataType/annType below)
+%% initialize api (please specify dataType/annType below)
 annTypes = { 'instances', 'captions', 'person_keypoints' };
 dataType='val2014'; annType=annTypes{1}; % specify dataType/annType
 annFile=sprintf('../annotations/%s_%s.json',annType,dataType);

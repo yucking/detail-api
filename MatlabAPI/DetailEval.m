@@ -1,4 +1,4 @@
-classdef CocoEval < handle
+classdef DetailEval < handle
   % Interface for evaluating detection on the Microsoft COCO dataset.
   %
   % The usage for CocoEval is as follows:
@@ -74,8 +74,8 @@ classdef CocoEval < handle
   % Licensed under the Simplified BSD License [see coco/license.txt]
   
   properties
-    cocoGt      % ground truth COCO API
-    cocoDt      % detections COCO API
+    groundTruth      % ground truth COCO API
+    detectionResults      % detections COCO API
     params      % evaluation parameters
     evalImgs    % per-image per-category evaluation results
     eval        % accumulated evaluation results
@@ -83,12 +83,12 @@ classdef CocoEval < handle
   end
   
   methods
-    function ev = CocoEval( cocoGt, cocoDt, iouType )
+    function ev = DetailEval( groundTruth, detectionResults, iouType )
       % Initialize CocoEval using coco APIs for gt and dt.
-      if(nargin>0), ev.cocoGt = cocoGt; end
-      if(nargin>1), ev.cocoDt = cocoDt; end
-      if(nargin>0), ev.params.imgIds = sort(ev.cocoGt.getImgIds()); end
-      if(nargin>0), ev.params.catIds = sort(ev.cocoGt.getCatIds()); end
+      if(nargin>0), ev.groundTruth = groundTruth; end
+      if(nargin>1), ev.detectionResults = detectionResults; end
+      if(nargin>0), ev.params.imgIds = sort(ev.groundTruth.getImgIds()); end
+      if(nargin>0), ev.params.catIds = sort(ev.groundTruth.getCatIds()); end
       if(nargin<3), iouType='segm'; end
       ev.params.iouThrs = .5:.05:.95;
       ev.params.recThrs = 0:.01:1;
@@ -112,15 +112,15 @@ classdef CocoEval < handle
       if(isfield(p,'useSegm')), p.iouType=t{p.useSegm+1}; end
       p.imgIds=unique(p.imgIds); p.catIds=unique(p.catIds); ev.params=p;
       N=length(p.imgIds); K=length(p.catIds); A=size(p.areaRng,1);
-      [nGt,iGt]=getAnnCounts(ev.cocoGt,p.imgIds,p.catIds,p.useCats);
-      [nDt,iDt]=getAnnCounts(ev.cocoDt,p.imgIds,p.catIds,p.useCats);
+      [nGt,iGt]=getAnnCounts(ev.groundTruth,p.imgIds,p.catIds,p.useCats);
+      [nDt,iDt]=getAnnCounts(ev.detectionResults,p.imgIds,p.catIds,p.useCats);
       [ks,is]=ndgrid(1:K,1:N); ev.evalImgs=cell(N,K,A);
       for i=1:K*N, if(nGt(i)==0 && nDt(i)==0), continue; end
-        gt=ev.cocoGt.data.annotations(iGt(i):iGt(i)+nGt(i)-1);
-        dt=ev.cocoDt.data.annotations(iDt(i):iDt(i)+nDt(i)-1);
+        gt=ev.groundTruth.data.annotations(iGt(i):iGt(i)+nGt(i)-1);
+        dt=ev.detectionResults.data.annotations(iDt(i):iDt(i)+nDt(i)-1);
         if(~isfield(gt,'ignore')), [gt(:).ignore]=deal(0); end
         if( strcmp(p.iouType,'segm') )
-          im=ev.cocoGt.loadImgs(p.imgIds(is(i))); h=im.height; w=im.width;
+          im=ev.groundTruth.loadImgs(p.imgIds(is(i))); h=im.height; w=im.width;
           for g=1:nGt(i), s=gt(g).segmentation; if(~isstruct(s))
               gt(g).segmentation=MaskApi.frPoly(s,h,w); end; end
           f='segmentation'; if(isempty(dt)), [dt(:).(f)]=deal(); end
@@ -138,7 +138,7 @@ classdef CocoEval < handle
         end
         q=p; q.imgIds=p.imgIds(is(i)); q.maxDets=max(p.maxDets);
         for j=1:A, q.areaRng=p.areaRng(j,:);
-          ev.evalImgs{is(i),ks(i),j}=CocoEval.evaluateImg(gt,dt,q); end
+          ev.evalImgs{is(i),ks(i),j}=DetailEval.evaluateImg(gt,dt,q); end
       end
       E=ev.evalImgs; nms={'dtIds','gtIds','dtImgIds','gtImgIds',...
         'dtMatches','gtMatches','dtScores','dtIgnore','gtIgnore'};
@@ -149,10 +149,10 @@ classdef CocoEval < handle
       end
       fprintf('DONE (t=%0.2fs).\n',etime(clock,clk));
       
-      function [ns,is] = getAnnCounts( coco, imgIds, catIds, useCats )
+      function [ns,is] = getAnnCounts( detail, imgIds, catIds, useCats )
         % Return ann counts and indices for given imgIds and catIds.
-        as=sort(coco.getCatIds()); [~,a]=ismember(coco.inds.annCatIds,as);
-        bs=sort(coco.getImgIds()); [~,b]=ismember(coco.inds.annImgIds,bs);
+        as=sort(detail.getCatIds()); [~,a]=ismember(detail.inds.annCatIds,as);
+        bs=sort(detail.getImgIds()); [~,b]=ismember(detail.inds.annImgIds,bs);
         if(~useCats), a(:)=1; as=1; end; ns=zeros(length(as),length(bs));
         for ind=1:length(a), ns(a(ind),b(ind))=ns(a(ind),b(ind))+1; end
         is=reshape(cumsum([0 ns(1:end-1)])+1,size(ns));
@@ -243,7 +243,7 @@ classdef CocoEval < handle
           q.type=p.type{i}; ev.visualize(q); end; return; end
       % generate file name for result
       areaNms={'all','small','medium','large'};
-      catNm=regexprep(ev.cocoGt.loadCats(p.catIds).name,' ','_');
+      catNm=regexprep(ev.groundTruth.loadCats(p.catIds).name,' ','_');
       fn=sprintf('%s/%s-%s-%s%%03i.jpg',p.outDir,...
         catNm,areaNms{p.areaIds},type); disp(fn);
       if(exist(sprintf(fn,1),'file')), return; end
@@ -261,9 +261,9 @@ classdef CocoEval < handle
       end
       % load dt, gt, and im and crop region bbs
       if(D), is=E.dtImgIds; else is=E.gtImgIds; end
-      n=min(prod(ds),length(is)); is=ev.cocoGt.loadImgs(is(1:n));
-      if(G), gt=ev.cocoGt.loadAnns(gt(1:n)); bb=gt; end
-      if(D), dt=ev.cocoDt.loadAnns(dt(1:n)); bb=dt; end
+      n=min(prod(ds),length(is)); is=ev.groundTruth.loadImgs(is(1:n));
+      if(G), gt=ev.groundTruth.loadAnns(gt(1:n)); bb=gt; end
+      if(D), dt=ev.detectionResults.loadAnns(dt(1:n)); bb=dt; end
       if(~n), return; end; bb=cat(1,bb.bbox); bb(:,1:2)=bb(:,1:2)+1;
       r=max(bb(:,3:4),[],2)*pad/d; r=[r r r r];
       bb=bbApply('resize',bbApply('squarify',bb,0),pad,pad);
@@ -294,30 +294,30 @@ classdef CocoEval < handle
     function analyze( ev )
       % Derek Hoiem style analyis of false positives.
       outDir='./analyze'; if(~exist(outDir,'dir')), mkdir(outDir); end
-      if(~isfield(ev.cocoGt.data.annotations,'ignore')),
-        [ev.cocoGt.data.annotations.ignore]=deal(0); end
-      dt=ev.cocoDt; gt=ev.cocoGt; prm=ev.params; rs=prm.recThrs;
-      ev.params.maxDets=100; catIds=ev.cocoGt.getCatIds();
+      if(~isfield(ev.groundTruth.data.annotations,'ignore')),
+        [ev.groundTruth.data.annotations.ignore]=deal(0); end
+      dt=ev.detectionResults; gt=ev.groundTruth; prm=ev.params; rs=prm.recThrs;
+      ev.params.maxDets=100; catIds=ev.groundTruth.getCatIds();
       % compute precision at different IoU values
       ev.params.catIds=catIds; ev.params.iouThrs=[.75 .5 .1];
       ev.evaluate(); ev.accumulate(); ps=ev.eval.precision;
       ps(4:7,:,:,:)=0; ev.params.iouThrs=.1; ev.params.useCats=0;
       for k=1:length(catIds), catId=catIds(k);
-        nm=ev.cocoGt.loadCats(catId); nm=[nm.supercategory '-' nm.name];
+        nm=ev.groundTruth.loadCats(catId); nm=[nm.supercategory '-' nm.name];
         fprintf('\nAnalyzing %s (%i):\n',nm,k); clk=clock;
         % select detections for single category only
         D=dt.data; A=D.annotations; A=A([A.category_id]==catId);
-        D.annotations=A; ev.cocoDt=dt; ev.cocoDt=CocoApi(D);
+        D.annotations=A; ev.detectionResults=dt; ev.detectionResults=DetailApi(D);
         % compute precision but ignore superclass confusion
         is=gt.getCatIds('supNms',gt.loadCats(catId).supercategory);
         D=gt.data; A=D.annotations; A=A(ismember([A.category_id],is));
         [A([A.category_id]~=catId).ignore]=deal(1);
-        D.annotations=A; ev.cocoGt=CocoApi(D);
+        D.annotations=A; ev.groundTruth=DetailApi(D);
         ev.evaluate(); ev.accumulate(); ps(4,:,k,:)=ev.eval.precision;
         % compute precision but ignore any class confusion
         D=gt.data; A=D.annotations;
         [A([A.category_id]~=catId).ignore]=deal(1);
-        D.annotations=A; ev.cocoGt=gt; ev.cocoGt.data=D;
+        D.annotations=A; ev.groundTruth=gt; ev.groundTruth.data=D;
         ev.evaluate(); ev.accumulate(); ps(5,:,k,:)=ev.eval.precision;
         % fill in background and false negative errors and plot
         ps(ps==-1)=0; ps(6,:,k,:)=ps(5,:,k,:)>0; ps(7,:,k,:)=1;
@@ -325,9 +325,9 @@ classdef CocoEval < handle
         fprintf('DONE (t=%0.2fs).\n',etime(clock,clk));
       end
       % plot averages over all categories and supercategories
-      ev.cocoDt=dt; ev.cocoGt=gt; ev.params=prm;
+      ev.detectionResults=dt; ev.groundTruth=gt; ev.params=prm;
       fprintf('\n'); makeplot(rs,mean(ps,3),outDir,'overall-all');
-      sup={ev.cocoGt.loadCats(catIds).supercategory};
+      sup={ev.groundTruth.loadCats(catIds).supercategory};
       for k=unique(sup), ps1=mean(ps(:,:,strcmp(sup,k),:),3);
         makeplot(rs,ps1,outDir,['overall-' k{1}]); end
       
@@ -371,7 +371,7 @@ classdef CocoEval < handle
       if(t==1), g=[gt.segmentation]; elseif(t==2), g=cat(1,gt.bbox); end
       if(t==1), d=[dt.segmentation]; elseif(t==2), d=cat(1,dt.bbox); end
       if(t<=2), ious=MaskApi.iou(d,g,iscrowd); else
-        ious=CocoEval.oks(gt,dt); end
+        ious=DetailEval.oks(gt,dt); end
       % attempt to match each (sorted) dt to each (sorted) gt
       gtm=zeros(T,G); gtIds=[gt.id]; gtIg=[gt.ignore];
       dtm=zeros(T,D); dtIds=[dt.id]; dtIg=zeros(T,D);

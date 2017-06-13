@@ -1,4 +1,4 @@
-classdef CocoApi
+classdef DetailApi
   % Interface for accessing the Microsoft COCO dataset.
   %
   % Microsoft COCO is a large image dataset designed for object detection,
@@ -46,7 +46,7 @@ classdef CocoApi
   end
   
   methods
-    function coco = CocoApi( annFile )
+    function detail = DetailApi( annFile )
       % Load COCO annotation file and prepare data structures.
       %
       % USAGE
@@ -56,16 +56,16 @@ classdef CocoApi
       %  annFile   - COCO annotation filename
       %
       % OUTPUTS
-      %  coco      - initialized coco object
+      %  detail      - initialized detail object
       fprintf('Loading and preparing annotations... '); clk=clock;
-      if(isstruct(annFile)), coco.data=annFile; else
-        coco.data=gason(fileread(annFile)); end
-      is.imgIds = [coco.data.images.id]';
+      if(isstruct(annFile)), detail.data=annFile; else
+        detail.data=gason(fileread(annFile)); end
+      is.imgIds = [detail.data.images.id]';
       is.imgIdsMap = makeMap(is.imgIds);
-      if( isfield(coco.data,'annotations') )
-        ann=coco.data.annotations; o=[ann.image_id];
+      if( isfield(detail.data,'annotations') )
+        ann=detail.data.annotations; o=[ann.image_id];
         if(isfield(ann,'category_id')), o=o*1e10+[ann.category_id]; end
-        [~,o]=sort(o); ann=ann(o); coco.data.annotations=ann;
+        [~,o]=sort(o); ann=ann(o); detail.data.annotations=ann;
         s={'category_id','area','iscrowd','id','image_id'};
         t={'annCatIds','annAreas','annIscrowd','annIds','annImgIds'};
         for f=1:5, if(isfield(ann,s{f})), is.(t{f})=[ann.(s{f})]'; end; end
@@ -73,13 +73,13 @@ classdef CocoApi
         is.imgAnnIdsMap = makeMultiMap(is.imgIds,...
           is.imgIdsMap,is.annImgIds,is.annIds,0);
       end
-      if( isfield(coco.data,'categories') )
-        is.catIds = [coco.data.categories.id]';
+      if( isfield(detail.data,'categories') )
+        is.catIds = [detail.data.categories.id]';
         is.catIdsMap = makeMap(is.catIds);
         if(isfield(is,'annCatIds')), is.catImgIdsMap = makeMultiMap(...
             is.catIds,is.catIdsMap,is.annCatIds,is.annImgIds,1); end
       end
-      coco.inds=is; fprintf('DONE (t=%0.2fs).\n',etime(clock,clk));
+      detail.inds=is; fprintf('DONE (t=%0.2fs).\n',etime(clock,clk));
       
       function map = makeMap( keys )
         % Make map from key to integer id associated with key.
@@ -99,11 +99,11 @@ classdef CocoApi
       end
     end
     
-    function ids = getAnnIds( coco, varargin )
+    function ids = getAnnIds( detail, varargin )
       % Get ann ids that satisfy given filter conditions.
       %
       % USAGE
-      %  ids = coco.getAnnIds( params )
+      %  ids = detail.getAnnIds( params )
       %
       % INPUTS
       %  params     - filtering parameters (struct or name/value pairs)
@@ -118,13 +118,13 @@ classdef CocoApi
       def = {'imgIds',[],'catIds',[],'areaRng',[],'iscrowd',[]};
       [imgIds,catIds,ar,iscrowd] = getPrmDflt(varargin,def,1);
       if( length(imgIds)==1 )
-        t = coco.loadAnns(coco.inds.imgAnnIdsMap(imgIds));
+        t = detail.loadAnns(detail.inds.imgAnnIdsMap(imgIds));
         if(~isempty(catIds)), t = t(ismember([t.category_id],catIds)); end
         if(~isempty(ar)), a=[t.area]; t = t(a>=ar(1) & a<=ar(2)); end
         if(~isempty(iscrowd)), t = t([t.iscrowd]==iscrowd); end
         ids = [t.id];
       else
-        ids=coco.inds.annIds; K = true(length(ids),1); t = coco.inds;
+        ids=detail.inds.annIds; K = true(length(ids),1); t = detail.inds;
         if(~isempty(imgIds)), K = K & ismember(t.annImgIds,imgIds); end
         if(~isempty(catIds)), K = K & ismember(t.annCatIds,catIds); end
         if(~isempty(ar)), a=t.annAreas; K = K & a>=ar(1) & a<=ar(2); end
@@ -133,11 +133,11 @@ classdef CocoApi
       end
     end
     
-    function ids = getCatIds( coco, varargin )
+    function ids = getCatIds( detail, varargin )
       % Get cat ids that satisfy given filter conditions.
       %
       % USAGE
-      %  ids = coco.getCatIds( params )
+      %  ids = detail.getCatIds( params )
       %
       % INPUTS
       %  params     - filtering parameters (struct or name/value pairs)
@@ -148,8 +148,8 @@ classdef CocoApi
       %
       % OUTPUTS
       %  ids        - integer array of cat ids
-      if(~isfield(coco.data,'categories')), ids=[]; return; end
-      def={'catNms',[],'supNms',[],'catIds',[]}; t=coco.data.categories;
+      if(~isfield(detail.data,'categories')), ids=[]; return; end
+      def={'catNms',[],'supNms',[],'catIds',[]}; t=detail.data.categories;
       [catNms,supNms,catIds] = getPrmDflt(varargin,def,1);
       if(~isempty(catNms)), t = t(ismember({t.name},catNms)); end
       if(~isempty(supNms)), t = t(ismember({t.supercategory},supNms)); end
@@ -157,11 +157,11 @@ classdef CocoApi
       ids = [t.id];
     end
     
-    function ids = getImgIds( coco, varargin )
+    function ids = getImgIds( detail, varargin )
       % Get img ids that satisfy given filter conditions.
       %
       % USAGE
-      %  ids = coco.getImgIds( params )
+      %  ids = detail.getImgIds( params )
       %
       % INPUTS
       %  params     - filtering parameters (struct or name/value pairs)
@@ -171,65 +171,65 @@ classdef CocoApi
       %
       % OUTPUTS
       %  ids        - integer array of img ids
-      def={'imgIds',[],'catIds',[]}; ids=coco.inds.imgIds;
+      def={'imgIds',[],'catIds',[]}; ids=detail.inds.imgIds;
       [imgIds,catIds] = getPrmDflt(varargin,def,1);
       if(~isempty(imgIds)), ids=intersect(ids,imgIds); end
       if(isempty(catIds)), return; end
-      t=values(coco.inds.catImgIdsMap,num2cell(catIds));
+      t=values(detail.inds.catImgIdsMap,num2cell(catIds));
       for i=1:length(t), ids=intersect(ids,t{i}); end
     end
     
-    function anns = loadAnns( coco, ids )
+    function anns = loadAnns( detail, ids )
       % Load anns with the specified ids.
       %
       % USAGE
-      %  anns = coco.loadAnns( ids )
+      %  anns = detail.loadAnns( ids )
       %
       % INPUTS
       %  ids        - integer ids specifying anns
       %
       % OUTPUTS
       %  anns       - loaded ann objects
-      ids = values(coco.inds.annIdsMap,num2cell(ids));
-      anns = coco.data.annotations([ids{:}]);
+      ids = values(detail.inds.annIdsMap,num2cell(ids));
+      anns = detail.data.annotations([ids{:}]);
     end
     
-    function cats = loadCats( coco, ids )
+    function cats = loadCats( detail, ids )
       % Load cats with the specified ids.
       %
       % USAGE
-      %  cats = coco.loadCats( ids )
+      %  cats = detail.loadCats( ids )
       %
       % INPUTS
       %  ids        - integer ids specifying cats
       %
       % OUTPUTS
       %  cats       - loaded cat objects
-      if(~isfield(coco.data,'categories')), cats=[]; return; end
-      ids = values(coco.inds.catIdsMap,num2cell(ids));
-      cats = coco.data.categories([ids{:}]);
+      if(~isfield(detail.data,'categories')), cats=[]; return; end
+      ids = values(detail.inds.catIdsMap,num2cell(ids));
+      cats = detail.data.categories([ids{:}]);
     end
     
-    function imgs = loadImgs( coco, ids )
+    function imgs = loadImgs( detail, ids )
       % Load imgs with the specified ids.
       %
       % USAGE
-      %  imgs = coco.loadImgs( ids )
+      %  imgs = detail.loadImgs( ids )
       %
       % INPUTS
       %  ids        - integer ids specifying imgs
       %
       % OUTPUTS
       %  imgs       - loaded img objects
-      ids = values(coco.inds.imgIdsMap,num2cell(ids));
-      imgs = coco.data.images([ids{:}]);
+      ids = values(detail.inds.imgIdsMap,num2cell(ids));
+      imgs = detail.data.images([ids{:}]);
     end
     
-    function hs = showAnns( coco, anns )
+    function hs = showAnns( detail, anns )
       % Display the specified annotations.
       %
       % USAGE
-      %  hs = coco.showAnns( anns )
+      %  hs = detail.showAnns( anns )
       %
       % INPUTS
       %  anns       - annotations to display
@@ -244,7 +244,7 @@ classdef CocoApi
           a=anns(i); if(isfield(a,'iscrowd') && a.iscrowd), continue; end
           seg={}; if(isfield(a,'segmentation')), seg=a.segmentation; end
           k=a.keypoints; x=k(1:3:end)+1; y=k(2:3:end)+1; v=k(3:3:end);
-          k=coco.loadCats(a.category_id); k=k.skeleton; c=cs(i,:); hold on
+          k=detail.loadCats(a.category_id); k=k.skeleton; c=cs(i,:); hold on
           p={'FaceAlpha',.25,'LineWidth',2,'EdgeColor',c}; % polygon
           for j=seg, xy=j{1}+.5; fill(xy(1:2:end),xy(2:2:end),c,p{:}); end
           p={'Color',c,'LineWidth',3}; % skeleton
@@ -276,23 +276,23 @@ classdef CocoApi
       end
     end
     
-    function cocoRes = loadRes( coco, resFile )
+    function detailRes = loadRes( detail, resFile )
       % Load algorithm results and create API for accessing them.
       %
       % The API for accessing and viewing algorithm results is identical to
-      % the CocoApi for the ground truth. The single difference is that the
+      % the DetailApi for the ground truth. The single difference is that the
       % ground truth results are replaced by the algorithm results.
       %
       % USAGE
-      %  cocoRes = coco.loadRes( resFile )
+      %  detailRes = detail.loadRes( resFile )
       %
       % INPUTS
-      %  resFile    - COCO results filename
+      %  resFile    - DETAIL results filename
       %
       % OUTPUTS
-      %  cocoRes    - initialized results API
+      %  detailRes    - initialized results API
       fprintf('Loading and preparing results...     '); clk=clock;
-      cdata=coco.data; R=gason(fileread(resFile)); m=length(R);
+      cdata=detail.data; R=gason(fileread(resFile)); m=length(R);
       valid=ismember([R.image_id],[cdata.images.id]);
       if(~all(valid)), error('Results provided for invalid images.'); end
       t={'segmentation','bbox','keypoints','caption'}; t=t{isfield(R,t)};
@@ -308,21 +308,21 @@ classdef CocoApi
         for i=1:m, R(i).area=a(i); R(i).id=i; end
       end
       fprintf('DONE (t=%0.2fs).\n',etime(clock,clk));
-      cdata.annotations=R; cocoRes=CocoApi(cdata);
+      cdata.annotations=R; detailRes=DetailApi(cdata);
     end
     
-    function download( coco, tarDir, maxn )
-      % Download COCO images from mscoco.org server.
+    function download( detail, tarDir, maxn )
+      % Download DETAIL images from detail server.
       %
       % USAGE
-      %  coco.download( tarDir, [maxn] )
+      %  detail.download( tarDir, [maxn] )
       %
       % INPUTS
-      %  tarDir     - COCO results filename
+      %  tarDir     - DETAIL results filename
       %  maxn       - maximum number of images to download
-      fs={coco.data.images.file_name}; n=length(fs);
+      fs={detail.data.images.file_name}; n=length(fs);
       if(nargin==3), n=min(n,maxn); end; [fs,o]=sort(fs);
-      urls={coco.data.images.coco_url}; urls=urls(o); do=true(1,n);
+      urls={detail.data.images.detail_url}; urls=urls(o); do=true(1,n);
       for i=1:n, fs{i}=[tarDir '/' fs{i}]; do(i)=~exist(fs{i},'file'); end
       fs=fs(do); urls=urls(do); n=length(fs); if(n==0), return; end
       if(~exist(tarDir,'dir')), mkdir(tarDir); end; t=tic;
