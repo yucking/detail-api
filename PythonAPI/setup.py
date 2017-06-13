@@ -8,16 +8,16 @@ import numpy as np
 
 ext_modules = [
     Extension(
-        'pycocotools._mask',
-        sources=['../common/maskApi.c', 'pycocotools/_mask.pyx'],
+        'detail._mask',
+        sources=['../common/maskApi.c', 'detail/_mask.pyx'],
         include_dirs = [np.get_include(), '../common'],
-        extra_compile_args=['-Wno-cpp', '-Wno-unused-function', '-std=c99'],
+        extra_compile_args=[],#'-Wno-cpp', '-Wno-unused-function', '-std=c99'],
     )
 ]
 
-setup(name='pycocotools',
-      packages=['pycocotools'],
-      package_dir = {'pycocotools': 'pycocotools'},
+setup(name='detail',
+      packages=['detail'],
+      package_dir = {'detail': 'detail'},
       version='2.0',
       ext_modules=
           cythonize(ext_modules)

@@ -62,10 +62,10 @@ if PYTHON_VERSION == 2:
 elif PYTHON_VERSION == 3:
     from urllib.request import urlretrieve
 
-class COCO:
+class Detail:
     def __init__(self, annotation_file=None):
         """
-        Constructor of Microsoft COCO helper class for reading and visualizing annotations.
+        Constructor of Detail helper class for reading and visualizing annotations.
         :param annotation_file (str): location of annotation file
         :param image_folder (str): location to the folder that hosts images.
         :return:
@@ -295,7 +295,7 @@ class COCO:
         :param   resFile (str)     : file name of result file
         :return: res (obj)         : result api object
         """
-        res = COCO()
+        res = Detail()
         res.dataset['images'] = [img for img in self.dataset['images']]
 
         print('Loading and preparing results...')
@@ -309,7 +309,7 @@ class COCO:
         assert type(anns) == list, 'results in not an array of objects'
         annsImgIds = [ann['image_id'] for ann in anns]
         assert set(annsImgIds) == (set(annsImgIds) & set(self.getImgIds())), \
-               'Results do not correspond to current coco set'
+               'Results do not correspond to current Detail set'
         if 'caption' in anns[0]:
             imgIds = set([img['id'] for img in res.dataset['images']]) & set([ann['image_id'] for ann in anns])
             res.dataset['images'] = [img for img in res.dataset['images'] if img['id'] in imgIds]
@@ -371,7 +371,7 @@ class COCO:
             tic = time.time()
             fname = os.path.join(tarDir, img['file_name'])
             if not os.path.exists(fname):
-                urlretrieve(img['coco_url'], fname)
+                urlretrieve(img['url'], fname)
             print('downloaded {}/{} images (t={:0.1f}s)'.format(i, N, time.time()- tic))
 
     def loadNumpyAnnotations(self, data):

@@ -7,7 +7,7 @@ from collections import defaultdict
 from . import mask as maskUtils
 import copy
 
-class COCOeval:
+class DetailEval:
     # Interface for evaluating detection on the Microsoft COCO dataset.
     #
     # The usage for CocoEval is as follows:
@@ -57,7 +57,7 @@ class COCOeval:
     # Data, paper, and tutorials available at:  http://mscoco.org/
     # Code written by Piotr Dollar and Tsung-Yi Lin, 2015.
     # Licensed under the Simplified BSD License [see coco/license.txt]
-    def __init__(self, cocoGt=None, cocoDt=None, iouType='segm'):
+    def __init__(self, groundTruth=None, detectionResults=None, iouType='segm'):
         '''
         Initialize CocoEval using coco APIs for gt and dt
         :param cocoGt: coco object with ground truth annotations
@@ -66,8 +66,8 @@ class COCOeval:
         '''
         if not iouType:
             print('iouType not specified. use default iouType segm')
-        self.cocoGt   = cocoGt              # ground truth COCO API
-        self.cocoDt   = cocoDt              # detections COCO API
+        self.groundTruth = groundTruth
+        self.detectionResults = detectionResults              # detections COCO API
         self.params   = {}                  # evaluation parameters
         self.evalImgs = defaultdict(list)   # per-image per-category evaluation results [KxAxI] elements
         self.eval     = {}                  # accumulated evaluation results
@@ -77,9 +77,9 @@ class COCOeval:
         self._paramsEval = {}               # parameters for evaluation
         self.stats = []                     # result summarization
         self.ious = {}                      # ious between all gts and dts
-        if not cocoGt is None:
-            self.params.imgIds = sorted(cocoGt.getImgIds())
-            self.params.catIds = sorted(cocoGt.getCatIds())
+        if not groundTruth is None:
+            self.params.imgIds = sorted(groundTruth.getImgIds())
+            self.params.catIds = sorted(groundTruth.getCatIds())
 
 
     def _prepare(self):
@@ -87,23 +87,23 @@ class COCOeval:
         Prepare ._gts and ._dts for evaluation based on params
         :return: None
         '''
-        def _toMask(anns, coco):
+        def _toMask(anns, detail):
             # modify ann['segmentation'] by reference
             for ann in anns:
-                rle = coco.annToRLE(ann)
+                rle = detail.annToRLE(ann)
                 ann['segmentation'] = rle
         p = self.params
         if p.useCats:
-            gts=self.cocoGt.loadAnns(self.cocoGt.getAnnIds(imgIds=p.imgIds, catIds=p.catIds))
-            dts=self.cocoDt.loadAnns(self.cocoDt.getAnnIds(imgIds=p.imgIds, catIds=p.catIds))
+            gts=self.groundTruth.loadAnns(self.groundTruth.getAnnIds(imgIds=p.imgIds, catIds=p.catIds))
+            dts=self.detectionResults.loadAnns(self.detectionResults.getAnnIds(imgIds=p.imgIds, catIds=p.catIds))
         else:
-            gts=self.cocoGt.loadAnns(self.cocoGt.getAnnIds(imgIds=p.imgIds))
-            dts=self.cocoDt.loadAnns(self.cocoDt.getAnnIds(imgIds=p.imgIds))
+            gts=self.groundTruth.loadAnns(self.groundTruth.getAnnIds(imgIds=p.imgIds))
+            dts=self.detectionResults.loadAnns(self.detectionResults.getAnnIds(imgIds=p.imgIds))
 
         # convert ground truth to mask if iouType == 'segm'
         if p.iouType == 'segm':
-            _toMask(gts, self.cocoGt)
-            _toMask(dts, self.cocoDt)
+            _toMask(gts, self.groundTruth)
+            _toMask(dts, self.detectionResults)
         # set ignore flag
         for gt in gts:
             gt['ignore'] = gt['ignore'] if 'ignore' in gt else 0
