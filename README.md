@@ -1,6 +1,6 @@
 # PASCAL in Detail API
 
-MATLAB, Python, and Lua API for the [PASCAL in Detail](https://sites.google.com/view/pasd/dataset) multi-task computer vision challenge. This API is a fork of [MS COCO vision challenge API](https://github.com/pdollar/coco).
+MATLAB and Python API for the [PASCAL in Detail](https://sites.google.com/view/pasd/dataset) multi-task computer vision challenge. This API is a fork of [MS COCO vision challenge API](https://github.com/pdollar/coco).
 
 ## Old COCO Readme
 <pre>
