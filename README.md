@@ -5,3 +5,9 @@ MATLAB and Python API for the [PASCAL in Detail](https://sites.google.com/view/p
 To install:
   - For Matlab, add detail-api/MatlabApi to the Matlab path (OSX/Linux binaries provided)
   - For Python, run "make" under detail-api/PythonAPI
+
+To see a demo:
+  - For Matlab, run detail-api/MatlabApi/detailDemo.m.
+  - For Python, run the IPython notebook detail-api/PythonApi/detailDemo.ipynb.
+  
+  
