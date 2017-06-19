@@ -52,6 +52,7 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Polygon
 import numpy as np
+import skimage.io as io
 import copy
 import itertools
 from . import mask as maskUtils
@@ -290,6 +291,24 @@ class Detail:
         elif datasetType == 'captions':
             for ann in anns:
                 print(ann['caption'])
+
+    def showImgCat(self, img, cat):
+        if type(img) is list:
+            img = img[0]
+        if type(img) is str:
+            img = int(img[:4]) * 1000000 + int(img[5:11])
+
+        if type(cat) is list:
+            cat = cat[0]
+        if type(cat) is str:
+            cat = self.getCatIds(catNms=[cat])[0]
+
+        file = '../images/%s_%s.jpg' % (str(img)[:4], str(img)[4:])
+        I = io.imread(file)
+        plt.imshow(I)
+        plt.axis('off')
+        self.showAnns(self.loadAnns(self.getAnnIds(imgIds=[img], catIds=[cat])))
+        plt.show()
 
     def loadRes(self, resFile):
         """
