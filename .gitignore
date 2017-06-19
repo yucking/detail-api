@@ -7,10 +7,9 @@ external/
 MatlabAPI/analyze*/
 MatlabAPI/visualize*/
 
-PythonAPI/pycocotools/__init__.pyc
-PythonAPI/pycocotools/_mask.c
-PythonAPI/pycocotools/_mask.so
-PythonAPI/pycocotools/coco.pyc
-PythonAPI/pycocotools/cocoeval.pyc
-PythonAPI/pycocotools/mask.pyc
+PythonAPI/detail/_mask.c
+PythonAPI/detail/_mask.so
+PythonAPI/detail/*.pyc
+PythonAPI/detail/*.pyd
 .ipynb_checkpoints/
+__pycache__/
