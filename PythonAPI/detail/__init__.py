@@ -1,50 +1,33 @@
-__author__ = 'tylin'
+__author__ = 'mricha56'
+__version__ = '2.3'
+# Interface for accessing the PASCAL in Detail dataset. detail is a Python API
+# that assists in loading, parsing, and visualizing the annotations of PASCAL
+# in Detail. Please visit https://sites.google.com/view/pasd/home for more
+# information about the PASCAL in Detail challenge. For example usage of the
+# detail API, see detailDemo.ipynb.
 
-__author__ = 'tylin'
-__version__ = '2.0'
-# Interface for accessing the Microsoft COCO dataset.
-
-# Microsoft COCO is a large image dataset designed for object detection,
-# segmentation, and caption generation. pycocotools is a Python API that
-# assists in loading, parsing and visualizing the annotations in COCO.
-# Please visit http://mscoco.org/ for more information on COCO, including
-# for the data, paper, and tutorials. The exact format of the annotations
-# is also described on the COCO website. For example usage of the pycocotools
-# please see pycocotools_demo.ipynb. In addition to this API, please download both
-# the COCO images and annotations in order to run the demo.
-
-# An alternative to using the API is to load the annotations directly
-# into Python dictionary
-# Using the API provides additional utility functions. Note that this API
-# supports both *instance* and *caption* annotations. In the case of
-# captions not all functions are defined (e.g. categories are undefined).
 
 # The following API functions are defined:
-#  COCO       - COCO api class that loads COCO annotation file and prepare data structures.
+#  Detail     - Detail api class that loads the annotation file and prepares data structures.
 #  decodeMask - Decode binary mask M encoded via run-length encoding.
 #  encodeMask - Encode binary mask M using run-length encoding.
-#  getAnnIds  - Get ann ids that satisfy given filter conditions.
-#  getCatIds  - Get cat ids that satisfy given filter conditions.
-#  getImgIds  - Get img ids that satisfy given filter conditions.
-#  loadAnns   - Load anns with the specified ids.
-#  loadCats   - Load cats with the specified ids.
-#  loadImgs   - Load imgs with the specified ids.
+#  getAnns  - Load annotations that satisfy given filter conditions.
+#  getCats  - Load categories that satisfy given filter conditions.
+#  getImgs  - Load images that satisfy given filter conditions.
 #  annToMask  - Convert segmentation in an annotation to binary mask.
 #  showAnns   - Display the specified annotations.
 #  loadRes    - Load algorithm results and create API for accessing them.
 #  download   - Download COCO images from mscoco.org server.
 # Throughout the API "ann"=annotation, "cat"=category, and "img"=image.
-# Help on each functions can be accessed by: "help COCO>function".
 
-# See also COCO>decodeMask,
-# COCO>encodeMask, COCO>getAnnIds, COCO>getCatIds,
-# COCO>getImgIds, COCO>loadAnns, COCO>loadCats,
-# COCO>loadImgs, COCO>annToMask, COCO>showAnns
 
-# Microsoft COCO Toolbox.      version 2.0
-# Data, paper, and tutorials available at:  http://mscoco.org/
-# Code written by Piotr Dollar and Tsung-Yi Lin, 2014.
-# Licensed under the Simplified BSD License [see bsd.txt]
+# PASCAL in Detail Toolbox     version 2.3
+# Modifications of COCO toolbox made by Matt Richard and Zhuotun Zhu
+# Forked from:
+#     Microsoft COCO Toolbox.      version 2.0
+#     Data, paper, and tutorials available at:  http://mscoco.org/
+#     Code written by Piotr Dollar and Tsung-Yi Lin, 2014.
+#     Licensed under the Simplified BSD License [see bsd.txt]
 
 import json
 import time
@@ -75,7 +58,6 @@ class Detail:
         """
         # load dataset
         self.dataset,self.anns,self.cats,self.imgs = dict(),dict(),dict(),dict()
-        self.imgToAnns, self.catToImgs = defaultdict(list), defaultdict(list)
         if not annotation_file == None:
             print('loading annotations into memory...')
             tic = time.time()
@@ -89,30 +71,35 @@ class Detail:
         # create index
         print('creating index...')
         anns, cats, imgs = {}, {}, {}
-        imgToAnns,catToImgs = defaultdict(list),defaultdict(list)
-        if 'annotations' in self.dataset:
-            for ann in self.dataset['annotations']:
-                imgToAnns[ann['image_id']].append(ann)
-                anns[ann['id']] = ann
 
-        if 'images' in self.dataset:
-            for img in self.dataset['images']:
-                imgs[img['id']] = img
 
-        if 'categories' in self.dataset:
-            for cat in self.dataset['categories']:
-                cats[cat['id']] = cat
+        for cat in self.dataset['categories']:
+            cat['images'] = []
+            cat['annotations'] = []
+            cats[cat['id']] = cat
 
-        if 'annotations' in self.dataset and 'categories' in self.dataset:
-            for ann in self.dataset['annotations']:
-                catToImgs[ann['category_id']].append(ann['image_id'])
+        for img in self.dataset['images']:
+            img['annotations'] = []
+            img['categories'] = []
+            imgs[img['id']] = img
+
+        for ann in self.dataset['annotations']:
+            img = imgs[ann['image_id']]
+            cat = cats[ann['category_id']]
+            img['annotations'].append(ann['id'])
+            cat['annotations'].append(ann['id'])
+            
+            if cat['id'] not in img['categories']:
+                img['categories'].append(cat['id'])
+            if img['id'] not in cat['images']:
+                cat['images'].append(img['id'])
+                
+            anns[ann['id']] = ann
 
         print('index created!')
 
         # create class members
         self.anns = anns
-        self.imgToAnns = imgToAnns
-        self.catToImgs = catToImgs
         self.imgs = imgs
         self.cats = cats
 
@@ -124,109 +111,198 @@ class Detail:
         for key, value in self.dataset['info'].items():
             print('{}: {}'.format(key, value))
 
-    def getAnnIds(self, imgIds=[], catIds=[], areaRng=[], iscrowd=None):
+    def getAnns(self, annIds=[], imgs=[], cats=[], areaRng=[]):
         """
-        Get ann ids that satisfy given filter conditions. default skips that filter
-        :param imgIds  (int array)     : get anns for given imgs
-               catIds  (int array)     : get anns for given cats
+        Get annotations that satisfy given filter conditions. default is no filter
+        :param annIds (int array) : get anns with the given IDs
+               imgs  (image array)     : get anns in the given imgs
+               cats  (category array)     : get anns for given cats
                areaRng (float array)   : get anns for given area range (e.g. [0 inf])
-               iscrowd (boolean)       : get anns for given crowd label (False or True)
-        :return: ids (int array)       : integer array of ann ids
+        :return: anns  (annotation array)       : array of annotations
         """
-        imgIds = imgIds if type(imgIds) == list else [imgIds]
-        catIds = catIds if type(catIds) == list else [catIds]
+        imgs = imgs if type(imgs) == list else [imgs]
+        cats = cats if type(cats) == list else [cats]
+        annIds = annIds if type(annIds) == list else [annIds]
 
-        if len(imgIds) == len(catIds) == len(areaRng) == 0:
-            anns = self.dataset['annotations']
-        else:
-            if not len(imgIds) == 0:
-                lists = [self.imgToAnns[imgId] for imgId in imgIds if imgId in self.imgToAnns]
-                anns = list(itertools.chain.from_iterable(lists))
-            else:
-                anns = self.dataset['annotations']
-            anns = anns if len(catIds)  == 0 else [ann for ann in anns if ann['category_id'] in catIds]
-            anns = anns if len(areaRng) == 0 else [ann for ann in anns if ann['area'] > areaRng[0] and ann['area'] < areaRng[1]]
-        if not iscrowd == None:
-            ids = [ann['id'] for ann in anns if ann['iscrowd'] == iscrowd]
-        else:
-            ids = [ann['id'] for ann in anns]
-        return ids
+        # Convert imgs and cats to simple IDs
+        for i in range(len(imgs)):
+            imgs[i] = self.__getImgId(imgs[i])
+        for i in range(len(cats)):
+            cats[i] = self.__getCatId(cats[i])
 
-    def getCatIds(self, catNms=[], supNms=[], catIds=[]):
+        # initialize anns from index
+        if len(annIds) > 0:
+            anns = [self.anns[annId] for annId in annIds]
+        elif len(imgs) > 0:
+            lists = [self.imgs[imgId]['annotations'] for imgId in imgs]
+            ids = list(itertools.chain.from_iterable(lists))
+            anns = [self.anns[id] for id in ids]
+        elif len(cats) > 0:
+            lists = [self.cats[catId]['annotations'] for catId in cats]
+            ids = list(itertools.chain.from_iterable(lists))
+            anns = [self.anns[id] for id in ids]
+        else:
+            anns = self.anns[:] # shallow copy self.anns
+
+        # filter according to params
+#        if len(annIds) > 0:
+#            anns = [ann for ann in anns if ann['id'] in annIds]
+        if len(imgs) > 0:
+            anns = [ann for ann in anns if ann['image_id'] in imgs]
+        if len(cats) > 0:
+            anns = [ann for ann in anns if ann['category_id'] in cats]
+        if len(areaRng) > 0:
+            anns = [ann for ann in anns if ann['area'] > areaRng[0] \
+                    and ann['area'] < areaRng[1]]
+
+        return anns
+
+
+    def getMask(self, img, cat=None, instance=None, part=None):
+        """
+        Get mask for a single annotation (can be an instance, class, or part mask).
+
+        If an instance mask is requested, the result is an image whose pixel values
+        are the part IDs for that instance and 0 everywhere else.
+
+        Likewise, if a class mask is requested, the result is an image whose pixel
+        values are the instance IDs for that class and 0 everywhere else.
+
+        Lastly, if an image mask is requested (cat=instance=part=None), the result
+        is an image whose pixel values are the class IDs for that image.
+
+        :param img (string or int) : image that mask describes
+               cat (string or int) : category that mask describes
+               instance (int) : instance that the mask describes (default is all instances)
+               part (string or int) :  part that mask describes (default is all parts)
+        :return: mask (numpy 2D array) : a mask describing the requested annotation.
+        """
+
+        img = self.getImgs(imgs=self.__getImgId(img))[0]
+        if cat is not None:
+            cat = getCats(cats=self.__getCatId(cat))[0]
+        if part is not None:
+            if type(part) is str:
+                assert cat is not None, \
+                    "Couldn't infer part ID from part name - please specify a category"
+                # infer part from name using `cat` param
+                part = [p for p in cat['parts'] if p['name'] == part][0]
+            elif type(part) is int:
+                # get part as dict
+                for c in getCats(cats=img['categories']):
+                    for p in c['parts']:
+                        if p['part_id'] == part:
+                            part = p
+                            break
+                    if type(part) is not int:
+                        break
+                    
+        anns = self.getAnns(annIds=img['annotations'])
+        mask = np.zeros((img['width'], img['height']))
+        
+        if cat is instance is part is None:
+            # Generate class mask
+            for ann in anns:
+                m = self.decodeMask(ann['segmentation'])
+                mask[np.nonzero(m)] = ann['category_id']                
+        elif cat is not None and instance is part is None:
+            # Generate instance mask
+            for ann in anns:
+                if ann['category_id'] == cat['id']:
+                    m = self.decodeMask(ann['segmentation'])
+                    mask[np.nonzero(m)] = ann['id']            
+        elif cat is not None and instance is not None and part is None:
+            # Generate part mask
+            ann = self.anns[instance]
+            for p in ann['parts']:
+                m = self.decodeMask(p['segmentation'])
+                mask[np.nonzero(m)] = p['part_id']
+        else:
+            # Generate single-part mask
+            ann = self.anns[instance]
+            m = self.decodeMask(part['segmentation'])
+            mask[np.nonzero(m)] = part['part_id']
+
+        return mask
+        
+
+    def __getImgId(self, img):
+        if type(img) == int: return img
+        if type(img) == dict: return img['id']
+        img = img.split('.')[0] # cut off .jpg extension
+        return img[:4] + img[5:] # '2008_000002' --> 2008000002
+
+    def __getCatId(self, cat):
+        if type(cat) == int: return cat
+        if type(cat) == dict: return cat['id']
+        return [c for c in self.cats if self.cats[c]['name'] == cat][0]
+
+    def getCats(self, cats=[], imgs=[]):
         """
         filtering parameters. default skips that filter.
-        :param catNms (str array)  : get cats for given cat names
-        :param supNms (str array)  : get cats for given supercategory names
-        :param catIds (int array)  : get cats for given cat ids
-        :return: ids (int array)   : integer array of cat ids
+        :param cats (int/string array)  : get cats for given cat names/ids
+        :param imgs (int/string array)  : get cats common across image names/ids
+        :return: categories (dict array)   : array of cat dicts
         """
-        catNms = catNms if type(catNms) == list else [catNms]
-        supNms = supNms if type(supNms) == list else [supNms]
-        catIds = catIds if type(catIds) == list else [catIds]
+        categories = []
+        
+        cats = cats if type(cats) == list else [cats]
+        imgs = imgs if type(imgs) == list else [imgs]
 
-        if len(catNms) == len(supNms) == len(catIds) == 0:
-            cats = self.dataset['categories']
-        else:
-            cats = self.dataset['categories']
-            cats = cats if len(catNms) == 0 else [cat for cat in cats if cat['name']          in catNms]
-            cats = cats if len(supNms) == 0 else [cat for cat in cats if cat['supercategory'] in supNms]
-            cats = cats if len(catIds) == 0 else [cat for cat in cats if cat['id']            in catIds]
-        ids = [cat['id'] for cat in cats]
-        return ids
+        for i in range(len(imgs)):
+            imgs[i] = self.__getImgId(imgs[i])
+        for i in range(len(cats)):
+            cats[i] = self.__getCatId(cats[i])
 
-    def getImgIds(self, imgIds=[], catIds=[]):
+        if len(imgs) == 0 and len(cats) == 0:
+            categories = self.cats[:]
+        elif len(cats) > 0:
+            categories = [self.cats[catId] for catId in cats]
+            if len(imgs) > 0:
+                for img in imgs:
+                    categories = [category for category in categories if img in category['images']]
+                else: # only images given
+                    lists = [self.imgs[imgId]['categories'] for imgId in imgs]
+                    catIds = set(lists[0])
+                    for l in range(1, len(lists)):
+                        catIds = catIds.intersect(set(l))
+                    categories = [self.cats[catId] for catId in catIds]
+        
+
+        return categories
+    
+    def getImgs(self, imgs=[], cats=[]):
         '''
-        Get img ids that satisfy given filter conditions.
-        :param imgIds (int array) : get imgs for given ids
-        :param catIds (int array) : get imgs with all given cats
-        :return: ids (int array)  : integer array of img ids
+        Get images that satisfy given filter conditions.
+        :param imgs (int array) : get imgs with given ids
+        :param cats (int array) : get imgs with all given cats
+        :return: images (dict array)  :  array of image dicts
         '''
-        imgIds = imgIds if type(imgIds) == list else [imgIds]
-        catIds = catIds if type(catIds) == list else [catIds]
+        images = []
+        
+        imgs = imgs if type(imgs) == list else [imgs]
+        cats = cats if type(cats) == list else [cats]
 
-        if len(imgIds) == len(catIds) == 0:
-            ids = self.imgs.keys()
-        else:
-            ids = set(imgIds)
-            for i, catId in enumerate(catIds):
-                if i == 0 and len(ids) == 0:
-                    ids = set(self.catToImgs[catId])
-                else:
-                    ids &= set(self.catToImgs[catId])
-        return list(ids)
+        for i in range(len(imgs)):
+            imgs[i] = self.__getImgId(imgs[i])
+        for i in range(len(cats)):
+            cats[i] = self.__getCatId(cats[i])
+            
+        if len(imgs) == 0 and len(cats) == 0:
+            images = self.imgs[:]
+        elif len(imgs) > 0:
+            images = [self.imgs[imgId] for imgId in imgs]
+            if len(cats) > 0:
+                for cat in cats:
+                    images = [image for image in images if cat in image['categories']]
+        else: # only cats given
+            lists = [self.cats[catId]['images'] for catId in cats]
+            imgIds = set(lists[0])
+            for l in range(1,len(lists)):
+                imgIds = imgIds.intersect(set(l))
+            images = [self.imgs[imgId] for imgId in imgIds]
 
-    def loadAnns(self, ids=[]):
-        """
-        Load anns with the specified ids.
-        :param ids (int array)       : integer ids specifying anns
-        :return: anns (object array) : loaded ann objects
-        """
-        if type(ids) == list:
-            return [self.anns[id] for id in ids]
-        elif type(ids) == int:
-            return [self.anns[ids]]
-
-    def loadCats(self, ids=[]):
-        """
-        Load cats with the specified ids.
-        :param ids (int array)       : integer ids specifying cats
-        :return: cats (object array) : loaded cat objects
-        """
-        if type(ids) == list:
-            return [self.cats[id] for id in ids]
-        elif type(ids) == int:
-            return [self.cats[ids]]
-
-    def loadImgs(self, ids=[]):
-        """
-        Load anns with the specified ids.
-        :param ids (int array)       : integer ids specifying img
-        :return: imgs (object array) : loaded img objects
-        """
-        if type(ids) == list:
-            return [self.imgs[id] for id in ids]
-        elif type(ids) == int:
-            return [self.imgs[ids]]
+        return images
 
     def showAnns(self, anns):
         """
@@ -371,29 +447,6 @@ class Detail:
         res.createIndex()
         return res
 
-    def download(self, tarDir = None, imgIds = [] ):
-        '''
-        Download COCO images from mscoco.org server.
-        :param tarDir (str): COCO results directory name
-               imgIds (list): images to be downloaded
-        :return:
-        '''
-        if tarDir is None:
-            print('Please specify target directory')
-            return -1
-        if len(imgIds) == 0:
-            imgs = self.imgs.values()
-        else:
-            imgs = self.loadImgs(imgIds)
-        N = len(imgs)
-        if not os.path.exists(tarDir):
-            os.makedirs(tarDir)
-        for i, img in enumerate(imgs):
-            tic = time.time()
-            fname = os.path.join(tarDir, img['file_name'])
-            if not os.path.exists(fname):
-                urlretrieve(img['url'], fname)
-            print('downloaded {}/{} images (t={:0.1f}s)'.format(i, N, time.time()- tic))
 
     def loadNumpyAnnotations(self, data):
         """
@@ -418,33 +471,10 @@ class Detail:
                 }]
         return ann
 
-    def annToRLE(self, ann):
+    def decodeMask(self, rle):
         """
-        Convert annotation which can be polygons, uncompressed RLE to RLE.
+        Convert uncompressed RLE to binary mask.
         :return: binary mask (numpy 2D array)
         """
-        t = self.imgs[ann['image_id']]
-        h, w = t['height'], t['width']
-        segm = ann['segmentation']
-        if type(segm) == list:
-            # polygon -- a single object might consist of multiple parts
-            # we merge all parts into one mask rle code
-            rles = maskUtils.frPyObjects(segm, h, w)
-            rle = maskUtils.merge(rles)
-        elif type(segm['counts']) == list:
-            # uncompressed RLE
-            rle = maskUtils.frPyObjects(segm, h, w)
-        else:
-            # rle
-            rle = ann['segmentation']
-        return rle
-
-    def annToMask(self, ann):
-        """
-        Convert annotation which can be polygons, uncompressed RLE, or RLE to binary mask.
-        :return: binary mask (numpy 2D array)
-        """
-        rle = self.annToRLE(ann)
-        m = maskUtils.decode(rle)
-        return m
+        return maskUtils.decode(rle)
 
