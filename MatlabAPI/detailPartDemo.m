@@ -9,8 +9,8 @@
 
 addpath('./Context/');
 
-image_path = '/media/zhuotun/Data/PASCAL/VOCdevkit/VOC2012/JPEGImages'; % './examples';
-json_path = '/media/zhuotun/Work_HD/MSCOCO/zhuotun/part/trainval/PASCAL_part_trainval.json';
+image_path = '../../images'; % './examples';
+json_path = '../../json/PASCAL_part_trainval.json';
 %images = part_train;%dir([image_path, '/', '*.jpg']);
 
 % correspondences between the category id (459 classes) to the original PASCAL 20 classes;
