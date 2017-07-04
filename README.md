@@ -8,6 +8,6 @@ To install:
 
 To see a demo:
   - For Matlab, run detail-api/MatlabApi/detailDemo.m.
-  - For Python, run the IPython notebook detail-api/PythonApi/detailDemo.ipynb.
+  - For Python, run the IPython notebook detail-api/PythonApi/detailDemo.ipynb. 
   
   
