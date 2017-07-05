@@ -7,7 +7,7 @@ To install:
   - For Python, run "make" under detail-api/PythonAPI
 
 To see a demo:
-  - For Matlab, run detail-api/MatlabApi/detailDemo.m.
-  - For Python, run the IPython notebook detail-api/PythonApi/detailDemo.ipynb.
+  - For Matlab, run detail-api/MatlabApi/detailDemo.m. 
+  - For Python, run the IPython notebook detail-api/PythonApi/detailDemo.ipynb. 
   
   
