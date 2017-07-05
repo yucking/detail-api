@@ -16,7 +16,7 @@ for ii = 1 : length(index)
     cate_id = part_annos.annotations(index(ii)).category_id;
     anno.objects(ii).class = part_annos.categories(part_annos_cates == cate_id).name;
     partsnames = part_annos.categories(part_annos_cates == cate_id).parts;
-    partsindices =cell2mat({partsnames.id});
+    partsindices =cell2mat({partsnames.part_id});
     
     % transfer the category id (459 classes) to the original PASCAL 20 classes;
     cate_id = find(part2senmatic == cate_id);

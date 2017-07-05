@@ -17,7 +17,7 @@ json_path = '../../json/PASCAL_part_trainval.json';
 load('./Context/part2senmatic.mat');
 part_annos = gason(fileread(json_path));
 part_annos_imgid = num2str((cell2mat({part_annos.annotations.image_id}))');
-part_annos_cates = cell2mat({part_annos.categories.id});
+part_annos_cates = cell2mat({part_annos.categories.category_id});
 
 % Shuffle image order
 images = cell2mat({part_annos.images.file_name}');
