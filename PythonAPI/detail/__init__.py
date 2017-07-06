@@ -65,9 +65,9 @@ class Detail:
             assert type(dataset)==dict, 'annotation file format {} not supported'.format(type(dataset))
             print('Done (t={:0.2f}s)'.format(time.time()- tic))
             self.dataset = dataset
-            self.createIndex()
+            self.__createIndex()
 
-    def createIndex(self):
+    def __createIndex(self):
         # create index
         print('creating index...')
         anns, cats, imgs = {}, {}, {}
@@ -161,22 +161,28 @@ class Detail:
 
     def getMask(self, img, cat=None, instance=None, part=None, show=False):
         """
-        Get mask for a single annotation (can be an instance, class, or part mask).
+        Get mask for a particular level of segmentation (can be an instance, class, or part mask).
 
-        If an instance mask is requested, the result is an image whose pixel values
-        are the part IDs for that instance and 0 everywhere else.
-
-        Likewise, if a class mask is requested, the result is an image whose pixel
+        If instance-level semgntation is requested (img and cat provided), the result is an image whose pixel
         values are the instance IDs for that class and 0 everywhere else.
 
-        Lastly, if an image mask is requested (cat=instance=part=None), the result
+        If part-level segmentation is requested (img, cat, and instance provided),
+        the result is an image whose pixel values are the part IDs for that instance
+        and 0 everywhere else.
+
+        Lastly, if semantic segmentation is requested (cat=instance=part=None), the result
         is an image whose pixel values are the class IDs for that image.
 
-        :param img (string or int) : image that mask describes
-               cat (string or int) : category that mask describes
-               instance (int) : instance that the mask describes (default is all instances)
-               part (string or int) :  part that mask describes (default is all parts)
-               show (boolean) :  whether to mask the mask to self.showMask() before returning.
+        :param img (string/int/dict) : image that mask describes
+               cat (string/int/dict) : category that mask describes
+               instance (string/int/dict) : instance that the mask describes (None
+                                            means all instances). If integer, interpreted
+                                            as id of an "annotation" object in JSON. If
+                                            string starting with #, e.g. '#0', interpreted as 0-based index
+                                            of instance within the image (cat is None)
+                                            or of instance within the given class (cat not None).
+               part (string or int) :  part that mask describes (None means all parts)
+               show (boolean) :  whether to pass the mask to self.showMask() before returning.
         :return: mask (numpy 2D array) : a mask describing the requested annotation.
         """
 
@@ -214,7 +220,8 @@ class Detail:
                     
         anns = self.getAnns(annIds=img['annotations'])
         mask = np.zeros((img['height'], img['width']))
-        
+
+        # Generate mask based on parameter configuration
         if cat is instance is part is None:
             # Generate class mask
             for ann in anns:
@@ -233,7 +240,11 @@ class Detail:
                 mask[np.nonzero(m)] = p['part_id']
         elif instance is not None and part is not None:
             # Generate single-part mask
-            m = self.decodeMask(part['segmentation'])
+            partMask = [p['segmentation'] for p in instance['parts'] \
+                        if p['part_id'] == part['part_id']]
+            assert len(partMask) > 0, 'Coudn\'t find a part mask for the given part and instance'
+            partMask = partMask[0]
+            m = self.decodeMask(partMask)
             mask[np.nonzero(m)] = part['part_id']
         elif cat is not None and part is not None:
             # Generate single-part mask
@@ -255,8 +266,11 @@ class Detail:
         return mask
 
     def showMask(self, mask):
+        """
+        Display given mask (numpy 2D array) as a colormapped image.
+        """
         nonzero = mask[np.nonzero(mask)]
-        plt.imshow(mask, clim=[np.min(nonzero), np.max(nonzero)])
+        plt.imshow(mask, clim=[np.min(nonzero) - 1, np.max(nonzero) + 1])
         plt.axis('off')
         plt.show()
 
@@ -273,10 +287,10 @@ class Detail:
 
     def getCats(self, cats=[], imgs=[]):
         """
-        filtering parameters. default skips that filter.
-        :param cats (int/string array)  : get cats for given cat names/ids
-        :param imgs (int/string array)  : get cats common across image names/ids
-        :return: categories (dict array)   : array of cat dicts
+        Get categories abiding by the given filters. default is no filter.
+        :param cats (int/string/dict array)  : get cats for given cat names/ids/dicts
+        :param imgs (int/string/dict array)  : get cats common across image names/ids
+        :return: categories (dict array)   : array of category dicts
         """
         categories = []
         
@@ -289,19 +303,20 @@ class Detail:
             cats[i] = self.__getCatId(cats[i])
 
         if len(imgs) == 0 and len(cats) == 0:
-            categories = self.cats[:]
+            categories = list(self.cats.values())
         elif len(cats) > 0:
             categories = [self.cats[catId] for catId in cats]
             if len(imgs) > 0:
                 for img in imgs:
                     categories = [category for category in categories if img in category['images']]
-                else: # only images given
-                    lists = [self.imgs[imgId]['categories'] for imgId in imgs]
-                    catIds = set(lists[0])
-                    for l in range(1, len(lists)):
-                        catIds = catIds.intersect(set(l))
-                    categories = [self.cats[catId] for catId in catIds]
-        
+        else: # only images given
+            lists = [self.imgs[imgId]['categories'] for imgId in imgs]
+            catIds = set(lists[0])
+            for l in range(1, len(lists)):
+                catIds = catIds.intersect(set(l))
+            categories = [self.cats[catId] for catId in catIds]
+                    
+
 
         return categories
 
@@ -311,11 +326,10 @@ class Detail:
         :param cat (int, string, or dict) : category to get parts for
         :return: parts (dict array) : array of part dicts, e.g. {"name": "head", "part_id": 110}
         """
-        parts = []
-
-        cat = self.getCats(cats=cat)
+        cat = self.getCats(cat)
         assert len(cat) > 0, 'Invalid category'
         cat = cat[0]
+        return list(cat['parts'])
         
     def getImgs(self, imgs=[], cats=[]):
         '''
@@ -335,7 +349,7 @@ class Detail:
             cats[i] = self.__getCatId(cats[i])
             
         if len(imgs) == 0 and len(cats) == 0:
-            images = self.imgs[:]
+            images = list(self.imgs.values())
         elif len(imgs) > 0:
             images = [self.imgs[imgId] for imgId in imgs]
             if len(cats) > 0:
@@ -350,172 +364,158 @@ class Detail:
 
         return images
 
-    def showAnns(self, anns):
-        """
-        Display the specified annotations.
-        :param anns (array of object): annotations to display
-        :return: None
-        """
-        if len(anns) == 0:
-            return 0
-        if 'segmentation' in anns[0] or 'keypoints' in anns[0]:
-            datasetType = 'instances'
-        elif 'caption' in anns[0]:
-            datasetType = 'captions'
-        else:
-            raise Exception('datasetType not supported')
-        if datasetType == 'instances':
-            ax = plt.gca()
-            ax.set_autoscale_on(False)
-            polygons = []
-            color = []
-            for ann in anns:
-                c = (np.random.random((1, 3))*0.6+0.4).tolist()[0]
-                if 'segmentation' in ann:
-                    if type(ann['segmentation']) == list:
-                        # polygon
-                        for seg in ann['segmentation']:
-                            poly = np.array(seg).reshape((int(len(seg)/2), 2))
-                            polygons.append(Polygon(poly))
-                            color.append(c)
-                    else:
-                        # mask
-                        t = self.imgs[ann['image_id']]
-                        if type(ann['segmentation']['counts']) == list:
-                            rle = maskUtils.frPyObjects([ann['segmentation']], t['height'], t['width'])
-                        else:
-                            rle = [ann['segmentation']]
-                        m = maskUtils.decode(rle)
-                        img = np.ones( (m.shape[0], m.shape[1], 3) )
-                        if ann['iscrowd'] == 1:
-                            color_mask = np.array([2.0,166.0,101.0])/255
-                        if ann['iscrowd'] == 0:
-                            color_mask = np.random.random((1, 3)).tolist()[0]
-                        for i in range(3):
-                            img[:,:,i] = color_mask[i]
-                        ax.imshow(np.dstack( (img, m*0.5) ))
-                if 'keypoints' in ann and type(ann['keypoints']) == list:
-                    # turn skeleton into zero-based index
-                    sks = np.array(self.loadCats(ann['category_id'])[0]['skeleton'])-1
-                    kp = np.array(ann['keypoints'])
-                    x = kp[0::3]
-                    y = kp[1::3]
-                    v = kp[2::3]
-                    for sk in sks:
-                        if np.all(v[sk]>0):
-                            plt.plot(x[sk],y[sk], linewidth=3, color=c)
-                    plt.plot(x[v>0], y[v>0],'o',markersize=8, markerfacecolor=c, markeredgecolor='k',markeredgewidth=2)
-                    plt.plot(x[v>1], y[v>1],'o',markersize=8, markerfacecolor=c, markeredgecolor=c, markeredgewidth=2)
-            p = PatchCollection(polygons, facecolor=color, linewidths=0, alpha=0.4)
-            ax.add_collection(p)
-            p = PatchCollection(polygons, facecolor='none', edgecolors=color, linewidths=2)
-            ax.add_collection(p)
-        elif datasetType == 'captions':
-            for ann in anns:
-                print(ann['caption'])
+    # From COCO API...not implemented for PASCAL in Detail
+#     def showAnns(self, anns):
+#         """
+#         Display the specified annotations.
+#         :param anns (array of object): annotations to display
+#         :return: None
+#         """
+#         if len(anns) == 0:
+#             return 0
+#         if 'segmentation' in anns[0] or 'keypoints' in anns[0]:
+#             datasetType = 'instances'
+#         elif 'caption' in anns[0]:
+#             datasetType = 'captions'
+#         else:
+#             raise Exception('datasetType not supported')
+#         if datasetType == 'instances':
+#             ax = plt.gca()
+#             ax.set_autoscale_on(False)
+#             polygons = []
+#             color = []
+#             for ann in anns:
+#                 c = (np.random.random((1, 3))*0.6+0.4).tolist()[0]
+#                 if 'segmentation' in ann:
+#                     if type(ann['segmentation']) == list:
+#                         # polygon
+#                         for seg in ann['segmentation']:
+#                             poly = np.array(seg).reshape((int(len(seg)/2), 2))
+#                             polygons.append(Polygon(poly))
+#                             color.append(c)
+#                     else:
+#                         # mask
+#                         t = self.imgs[ann['image_id']]
+#                         if type(ann['segmentation']['counts']) == list:
+#                             rle = maskUtils.frPyObjects([ann['segmentation']], t['height'], t['width'])
+#                         else:
+#                             rle = [ann['segmentation']]
+#                         m = maskUtils.decode(rle)
+#                         img = np.ones( (m.shape[0], m.shape[1], 3) )
+#                         if ann['iscrowd'] == 1:
+#                             color_mask = np.array([2.0,166.0,101.0])/255
+#                         if ann['iscrowd'] == 0:
+#                             color_mask = np.random.random((1, 3)).tolist()[0]
+#                         for i in range(3):
+#                             img[:,:,i] = color_mask[i]
+#                         ax.imshow(np.dstack( (img, m*0.5) ))
+#                 if 'keypoints' in ann and type(ann['keypoints']) == list:
+#                     # turn skeleton into zero-based index
+#                     sks = np.array(self.loadCats(ann['category_id'])[0]['skeleton'])-1
+#                     kp = np.array(ann['keypoints'])
+#                     x = kp[0::3]
+#                     y = kp[1::3]
+#                     v = kp[2::3]
+#                     for sk in sks:
+#                         if np.all(v[sk]>0):
+#                             plt.plot(x[sk],y[sk], linewidth=3, color=c)
+#                     plt.plot(x[v>0], y[v>0],'o',markersize=8, markerfacecolor=c, markeredgecolor='k',markeredgewidth=2)
+#                     plt.plot(x[v>1], y[v>1],'o',markersize=8, markerfacecolor=c, markeredgecolor=c, markeredgewidth=2)
+#             p = PatchCollection(polygons, facecolor=color, linewidths=0, alpha=0.4)
+#             ax.add_collection(p)
+#             p = PatchCollection(polygons, facecolor='none', edgecolors=color, linewidths=2)
+#             ax.add_collection(p)
+#         elif datasetType == 'captions':
+#             for ann in anns:
+#                 print(ann['caption'])
 
-    # def showMask(self, img, cat):
-    #     if type(img) is list:
-    #         img = img[0]
-    #     if type(img) is str:
-    #         img = int(img[:4]) * 1000000 + int(img[5:11])
+
+    # From COCO API...not implemented for PASCAL in Detail
+#     def loadRes(self, resFile):
+#         """
+#         Load result file and return a result api object.
+#         :param   resFile (str)     : file name of result file
+#         :return: res (obj)         : result api object
+#         """
+#         res = Detail()
+#         res.dataset['images'] = [img for img in self.dataset['images']]
 # 
-#         if type(cat) is list:
-#             cat = cat[0]
-#         if type(cat) is str:
-#             cat = self.getCatIds(catNms=[cat])[0]
+#         print('Loading and preparing results...')
+#         tic = time.time()
+#         if type(resFile) == str or type(resFile) == unicode:
+#             anns = json.load(open(resFile))
+#         elif type(resFile) == np.ndarray:
+#             anns = self.loadNumpyAnnotations(resFile)
+#         else:
+#             anns = resFile
+#         assert type(anns) == list, 'results in not an array of objects'
+#         annsImgIds = [ann['image_id'] for ann in anns]
+#         assert set(annsImgIds) == (set(annsImgIds) & set(self.getImgIds())), \
+#                'Results do not correspond to current Detail set'
+#         if 'caption' in anns[0]:
+#             imgIds = set([img['image_id'] for img in res.dataset['images']]) & set([ann['image_id'] for ann in anns])
+#             res.dataset['images'] = [img for img in res.dataset['images'] if img['image_id'] in imgIds]
+#             for id, ann in enumerate(anns):
+#                 ann['id'] = id+1
+#         elif 'bbox' in anns[0] and not anns[0]['bbox'] == []:
+#             res.dataset['categories'] = copy.deepcopy(self.dataset['categories'])
+#             for id, ann in enumerate(anns):
+#                 bb = ann['bbox']
+#                 x1, x2, y1, y2 = [bb[0], bb[0]+bb[2], bb[1], bb[1]+bb[3]]
+#                 if not 'segmentation' in ann:
+#                     ann['segmentation'] = [[x1, y1, x1, y2, x2, y2, x2, y1]]
+#                 ann['area'] = bb[2]*bb[3]
+#                 ann['id'] = id+1
+#                 ann['iscrowd'] = 0
+#         elif 'segmentation' in anns[0]:
+#             res.dataset['categories'] = copy.deepcopy(self.dataset['categories'])
+#             for id, ann in enumerate(anns):
+#                 # now only support compressed RLE format as segmentation results
+#                 ann['area'] = maskUtils.area(ann['segmentation'])
+#                 if not 'bbox' in ann:
+#                     ann['bbox'] = maskUtils.toBbox(ann['segmentation'])
+#                 ann['id'] = id+1
+#                 ann['iscrowd'] = 0
+#         elif 'keypoints' in anns[0]:
+#             res.dataset['categories'] = copy.deepcopy(self.dataset['categories'])
+#             for id, ann in enumerate(anns):
+#                 s = ann['keypoints']
+#                 x = s[0::3]
+#                 y = s[1::3]
+#                 x0,x1,y0,y1 = np.min(x), np.max(x), np.min(y), np.max(y)
+#                 ann['area'] = (x1-x0)*(y1-y0)
+#                 ann['id'] = id + 1
+#                 ann['bbox'] = [x0,y0,x1-x0,y1-y0]
+#         print('DONE (t={:0.2f}s)'.format(time.time()- tic))
 # 
-#         file = '../images/%s_%s.jpg' % (str(img)[:4], str(img)[4:])
-#         I = io.imread(file)
-#         plt.imshow(I)
-#         plt.axis('off')
-#         self.showAnns(self.loadAnns(self.getAnnIds(imgIds=[img], catIds=[cat])))
-#         plt.show()
-
-    def loadRes(self, resFile):
-        """
-        Load result file and return a result api object.
-        :param   resFile (str)     : file name of result file
-        :return: res (obj)         : result api object
-        """
-        res = Detail()
-        res.dataset['images'] = [img for img in self.dataset['images']]
-
-        print('Loading and preparing results...')
-        tic = time.time()
-        if type(resFile) == str or type(resFile) == unicode:
-            anns = json.load(open(resFile))
-        elif type(resFile) == np.ndarray:
-            anns = self.loadNumpyAnnotations(resFile)
-        else:
-            anns = resFile
-        assert type(anns) == list, 'results in not an array of objects'
-        annsImgIds = [ann['image_id'] for ann in anns]
-        assert set(annsImgIds) == (set(annsImgIds) & set(self.getImgIds())), \
-               'Results do not correspond to current Detail set'
-        if 'caption' in anns[0]:
-            imgIds = set([img['image_id'] for img in res.dataset['images']]) & set([ann['image_id'] for ann in anns])
-            res.dataset['images'] = [img for img in res.dataset['images'] if img['image_id'] in imgIds]
-            for id, ann in enumerate(anns):
-                ann['id'] = id+1
-        elif 'bbox' in anns[0] and not anns[0]['bbox'] == []:
-            res.dataset['categories'] = copy.deepcopy(self.dataset['categories'])
-            for id, ann in enumerate(anns):
-                bb = ann['bbox']
-                x1, x2, y1, y2 = [bb[0], bb[0]+bb[2], bb[1], bb[1]+bb[3]]
-                if not 'segmentation' in ann:
-                    ann['segmentation'] = [[x1, y1, x1, y2, x2, y2, x2, y1]]
-                ann['area'] = bb[2]*bb[3]
-                ann['id'] = id+1
-                ann['iscrowd'] = 0
-        elif 'segmentation' in anns[0]:
-            res.dataset['categories'] = copy.deepcopy(self.dataset['categories'])
-            for id, ann in enumerate(anns):
-                # now only support compressed RLE format as segmentation results
-                ann['area'] = maskUtils.area(ann['segmentation'])
-                if not 'bbox' in ann:
-                    ann['bbox'] = maskUtils.toBbox(ann['segmentation'])
-                ann['id'] = id+1
-                ann['iscrowd'] = 0
-        elif 'keypoints' in anns[0]:
-            res.dataset['categories'] = copy.deepcopy(self.dataset['categories'])
-            for id, ann in enumerate(anns):
-                s = ann['keypoints']
-                x = s[0::3]
-                y = s[1::3]
-                x0,x1,y0,y1 = np.min(x), np.max(x), np.min(y), np.max(y)
-                ann['area'] = (x1-x0)*(y1-y0)
-                ann['id'] = id + 1
-                ann['bbox'] = [x0,y0,x1-x0,y1-y0]
-        print('DONE (t={:0.2f}s)'.format(time.time()- tic))
-
-        res.dataset['annotations'] = anns
-        res.createIndex()
-        return res
+#         res.dataset['annotations'] = anns
+#         res.createIndex()
+#         return res
 
 
-    def loadNumpyAnnotations(self, data):
-        """
-        Convert result data from a numpy array [Nx7] where each row contains {imageID,x1,y1,w,h,score,class}
-        :param  data (numpy.ndarray)
-        :return: annotations (python nested list)
-        """
-        print('Converting ndarray to lists...')
-        assert(type(data) == np.ndarray)
-        print(data.shape)
-        assert(data.shape[1] == 7)
-        N = data.shape[0]
-        ann = []
-        for i in range(N):
-            if i % 1000000 == 0:
-                print('{}/{}'.format(i,N))
-            ann += [{
-                'image_id'  : int(data[i, 0]),
-                'bbox'  : [ data[i, 1], data[i, 2], data[i, 3], data[i, 4] ],
-                'score' : data[i, 5],
-                'category_id': int(data[i, 6]),
-                }]
-        return ann
+    # From COCO API...not implemented for PASCAL in Detail
+#     def loadNumpyAnnotations(self, data):
+#         """
+#         Convert result data from a numpy array [Nx7] where each row contains {imageID,x1,y1,w,h,score,class}
+#         :param  data (numpy.ndarray)
+#         :return: annotations (python nested list)
+#         """
+#         print('Converting ndarray to lists...')
+#         assert(type(data) == np.ndarray)
+#         print(data.shape)
+#         assert(data.shape[1] == 7)
+#         N = data.shape[0]
+#         ann = []
+#         for i in range(N):
+#             if i % 1000000 == 0:
+#                 print('{}/{}'.format(i,N))
+#             ann += [{
+#                 'image_id'  : int(data[i, 0]),
+#                 'bbox'  : [ data[i, 1], data[i, 2], data[i, 3], data[i, 4] ],
+#                 'score' : data[i, 5],
+#                 'category_id': int(data[i, 6]),
+#                 }]
+#         return ann
 
     def decodeMask(self, rle):
         """
