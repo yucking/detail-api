@@ -1,5 +1,5 @@
 __author__ = 'mricha56'
-__version__ = '2.3'
+__version__ = '3.0'
 # Interface for accessing the PASCAL in Detail dataset. detail is a Python API
 # that assists in loading, parsing, and visualizing the annotations of PASCAL
 # in Detail. Please visit https://sites.google.com/view/pasd/home for more
@@ -21,7 +21,7 @@ __version__ = '2.3'
 # Throughout the API "ann"=annotation, "cat"=category, and "img"=image.
 
 
-# PASCAL in Detail Toolbox     version 2.3
+# PASCAL in Detail Toolbox     version 3.0
 # Modifications of COCO toolbox made by Matt Richard and Zhuotun Zhu
 # Forked from:
 #     Microsoft COCO Toolbox.      version 2.0
