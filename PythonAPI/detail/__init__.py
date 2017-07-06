@@ -76,12 +76,12 @@ class Detail:
         for cat in self.dataset['categories']:
             cat['images'] = []
             cat['annotations'] = []
-            cats[cat['id']] = cat
+            cats[cat['category_id']] = cat
 
         for img in self.dataset['images']:
             img['annotations'] = []
             img['categories'] = []
-            imgs[img['id']] = img
+            imgs[img['image_id']] = img
 
         for ann in self.dataset['annotations']:
             img = imgs[ann['image_id']]
@@ -89,10 +89,10 @@ class Detail:
             img['annotations'].append(ann['id'])
             cat['annotations'].append(ann['id'])
             
-            if cat['id'] not in img['categories']:
-                img['categories'].append(cat['id'])
-            if img['id'] not in cat['images']:
-                cat['images'].append(img['id'])
+            if cat['category_id'] not in img['categories']:
+                img['categories'].append(cat['category_id'])
+            if img['image_id'] not in cat['images']:
+                cat['images'].append(img['image_id'])
                 
             anns[ann['id']] = ann
 
@@ -132,7 +132,8 @@ class Detail:
 
         # initialize anns from index
         if len(annIds) > 0:
-            anns = [self.anns[annId] for annId in annIds]
+            try: anns = [self.anns[annId] for annId in annIds]
+            except IndexError: assert False, 'Annotation with the given IDs not found: %s' % annIds
         elif len(imgs) > 0:
             lists = [self.imgs[imgId]['annotations'] for imgId in imgs]
             ids = list(itertools.chain.from_iterable(lists))
@@ -158,7 +159,7 @@ class Detail:
         return anns
 
 
-    def getMask(self, img, cat=None, instance=None, part=None):
+    def getMask(self, img, cat=None, instance=None, part=None, show=False):
         """
         Get mask for a single annotation (can be an instance, class, or part mask).
 
@@ -175,12 +176,14 @@ class Detail:
                cat (string or int) : category that mask describes
                instance (int) : instance that the mask describes (default is all instances)
                part (string or int) :  part that mask describes (default is all parts)
+               show (boolean) :  whether to mask the mask to self.showMask() before returning.
         :return: mask (numpy 2D array) : a mask describing the requested annotation.
         """
 
+        # Validate params and convert them to dicts
         img = self.getImgs(imgs=self.__getImgId(img))[0]
         if cat is not None:
-            cat = getCats(cats=self.__getCatId(cat))[0]
+            cat = self.getCats(cats=self.__getCatId(cat))[0]
         if part is not None:
             if type(part) is str:
                 assert cat is not None, \
@@ -189,16 +192,28 @@ class Detail:
                 part = [p for p in cat['parts'] if p['name'] == part][0]
             elif type(part) is int:
                 # get part as dict
-                for c in getCats(cats=img['categories']):
+                for c in self.getCats(cats=img['categories']):
                     for p in c['parts']:
                         if p['part_id'] == part:
                             part = p
                             break
                     if type(part) is not int:
                         break
+        if instance is not None:
+            if type(instance) is str:
+                if instance.startswith('#'):
+                    # If instance is set to '#N' where N is an integer,
+                    # get the Nth (0-indexed) instance of the given category.
+                    instance = self.getAnns(imgs=img, cats=([] if cat is None else cat))[int(instance[1:])]
+                else:
+                    instance = int(instance)
+                
+            if type(instance) is int: 
+                instance = self.getAnns(instance)[0]
+            
                     
         anns = self.getAnns(annIds=img['annotations'])
-        mask = np.zeros((img['width'], img['height']))
+        mask = np.zeros((img['height'], img['width']))
         
         if cat is instance is part is None:
             # Generate class mask
@@ -208,33 +223,52 @@ class Detail:
         elif cat is not None and instance is part is None:
             # Generate instance mask
             for ann in anns:
-                if ann['category_id'] == cat['id']:
+                if ann['category_id'] == cat['category_id']:
                     m = self.decodeMask(ann['segmentation'])
                     mask[np.nonzero(m)] = ann['id']            
-        elif cat is not None and instance is not None and part is None:
+        elif instance is not None and part is None:
             # Generate part mask
-            ann = self.anns[instance]
-            for p in ann['parts']:
+            for p in instance['parts']:
                 m = self.decodeMask(p['segmentation'])
                 mask[np.nonzero(m)] = p['part_id']
-        else:
+        elif instance is not None and part is not None:
             # Generate single-part mask
-            ann = self.anns[instance]
             m = self.decodeMask(part['segmentation'])
             mask[np.nonzero(m)] = part['part_id']
+        elif cat is not None and part is not None:
+            # Generate single-part mask
+            ann = self.getAnns(imgs=img, cats=cat)
+            assert len(ann) == 1, 'The given category must have one instance, or part should be provided.'
+            ann = ann[0]
+            partMask = [p['segmentation'] for p in ann['parts'] \
+                        if p['part_id'] == part['part_id']]
+            assert len(partMask) > 0, 'Couldn\'t find a part mask for the given part and category'
+            partMask = partMask[0]
+            m = self.decodeMask(partMask)
+            mask[np.nonzero(m)] = part['part_id']
+        else:
+            assert False, 'Invalid parameters'
+
+        if show:
+            self.showMask(mask)
 
         return mask
-        
+
+    def showMask(self, mask):
+        nonzero = mask[np.nonzero(mask)]
+        plt.imshow(mask, clim=[np.min(nonzero), np.max(nonzero)])
+        plt.axis('off')
+        plt.show()
 
     def __getImgId(self, img):
         if type(img) == int: return img
-        if type(img) == dict: return img['id']
+        if type(img) == dict: return img['image_id']
         img = img.split('.')[0] # cut off .jpg extension
         return img[:4] + img[5:] # '2008_000002' --> 2008000002
 
     def __getCatId(self, cat):
         if type(cat) == int: return cat
-        if type(cat) == dict: return cat['id']
+        if type(cat) == dict: return cat['category_id']
         return [c for c in self.cats if self.cats[c]['name'] == cat][0]
 
     def getCats(self, cats=[], imgs=[]):
@@ -270,7 +304,19 @@ class Detail:
         
 
         return categories
-    
+
+    def getParts(self, cat):
+        """
+        Get parts of a particular category.
+        :param cat (int, string, or dict) : category to get parts for
+        :return: parts (dict array) : array of part dicts, e.g. {"name": "head", "part_id": 110}
+        """
+        parts = []
+
+        cat = self.getCats(cats=cat)
+        assert len(cat) > 0, 'Invalid category'
+        cat = cat[0]
+        
     def getImgs(self, imgs=[], cats=[]):
         '''
         Get images that satisfy given filter conditions.
@@ -368,23 +414,23 @@ class Detail:
             for ann in anns:
                 print(ann['caption'])
 
-    def showImgCat(self, img, cat):
-        if type(img) is list:
-            img = img[0]
-        if type(img) is str:
-            img = int(img[:4]) * 1000000 + int(img[5:11])
-
-        if type(cat) is list:
-            cat = cat[0]
-        if type(cat) is str:
-            cat = self.getCatIds(catNms=[cat])[0]
-
-        file = '../images/%s_%s.jpg' % (str(img)[:4], str(img)[4:])
-        I = io.imread(file)
-        plt.imshow(I)
-        plt.axis('off')
-        self.showAnns(self.loadAnns(self.getAnnIds(imgIds=[img], catIds=[cat])))
-        plt.show()
+    # def showMask(self, img, cat):
+    #     if type(img) is list:
+    #         img = img[0]
+    #     if type(img) is str:
+    #         img = int(img[:4]) * 1000000 + int(img[5:11])
+# 
+#         if type(cat) is list:
+#             cat = cat[0]
+#         if type(cat) is str:
+#             cat = self.getCatIds(catNms=[cat])[0]
+# 
+#         file = '../images/%s_%s.jpg' % (str(img)[:4], str(img)[4:])
+#         I = io.imread(file)
+#         plt.imshow(I)
+#         plt.axis('off')
+#         self.showAnns(self.loadAnns(self.getAnnIds(imgIds=[img], catIds=[cat])))
+#         plt.show()
 
     def loadRes(self, resFile):
         """
@@ -408,8 +454,8 @@ class Detail:
         assert set(annsImgIds) == (set(annsImgIds) & set(self.getImgIds())), \
                'Results do not correspond to current Detail set'
         if 'caption' in anns[0]:
-            imgIds = set([img['id'] for img in res.dataset['images']]) & set([ann['image_id'] for ann in anns])
-            res.dataset['images'] = [img for img in res.dataset['images'] if img['id'] in imgIds]
+            imgIds = set([img['image_id'] for img in res.dataset['images']]) & set([ann['image_id'] for ann in anns])
+            res.dataset['images'] = [img for img in res.dataset['images'] if img['image_id'] in imgIds]
             for id, ann in enumerate(anns):
                 ann['id'] = id+1
         elif 'bbox' in anns[0] and not anns[0]['bbox'] == []:
