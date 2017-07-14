@@ -49,59 +49,110 @@ elif PYTHON_VERSION == 3:
     from urllib.request import urlretrieve
 
 class Detail:
-    def __init__(self, annotation_file=None):
+    def __init__(self, annotation_file='json/trainval_merged.json',
+                 image_folder='VOCdevkit/VOC2010/JPEGImages',
+                 phase='trainval'):
         """
         Constructor of Detail helper class for reading and visualizing annotations.
         :param annotation_file (str): location of annotation file
-        :param image_folder (str): location to the folder that hosts images.
+        :param image_folder (str): location to the folder that has pascal JPEG images.
+        :param phase (str): image set to look at: train, val, test, or any combination
+                            of the three (trainval, trainvaltest)
         :return:
         """
         # load dataset
-        self.dataset,self.anns,self.cats,self.imgs = dict(),dict(),dict(),dict()
-        if not annotation_file == None:
-            print('loading annotations into memory...')
-            tic = time.time()
-            dataset = json.load(open(annotation_file, 'r'))
-            assert type(dataset)==dict, 'annotation file format {} not supported'.format(type(dataset))
-            print('Done (t={:0.2f}s)'.format(time.time()- tic))
-            self.dataset = dataset
-            self.__createIndex()
+        self.phase = phase
+        self.img_folder = image_folder
+
+        print('loading annotations into memory...')
+        tic = time.time()
+
+        self.data = json.load(open(annotation_file, 'r'))
+        assert type(dataset)==dict, 'annotation file format {} not supported'.format(type(dataset))
+        print('Done (t={:0.2f}s)'.format(time.time()- tic))
+
+        self.__createIndex()
 
     def __createIndex(self):
         # create index
         print('creating index...')
-        anns, cats, imgs = {}, {}, {}
 
+        # create class members
+        self.cats,self.imgs,self.instances,self.semantic,self.occlusion,
+            self.parts= {},{},{},{},{},{}
 
-        for cat in self.dataset['categories']:
+        phases = []
+        if "train" in self.phase: splits.append("train")
+        if "val" in self.phase: splits.append("val")
+        if "test" in self.phase: splits.append("test")
+        assert len(phases) > 0, 'Invalid phase, {}'.format(self.phase)
+
+        # Filter images and annotations according to phase
+        for img in data['images']:
+            if img['phase'] not in phases:
+                data['images'].remove(img)
+            else:
+                self.imgs[img['image_id']] = img
+
+        imgIds = list(self.imgs.keys())
+        for segm in data['annos_segmentation']:
+            if segm['image_id'] not in imgIds:
+                data['annos_segmentation'].remove(segm)
+            elif not segm['iscrowd']:
+                self.instances[segm['id']] = segm
+            else:
+                self.semantic[segm['id']] = segm
+
+        for occl in data['annos_occlusion']:
+            if occl['image_id'] not in imgIds:
+                data['annos_occlusion'].remove(occl)
+            else:
+                self.occlusion[occl['id']] = occl
+
+        # Follow references
+        for cat in self.data['categories']:
             cat['images'] = []
             cat['annotations'] = []
             cats[cat['category_id']] = cat
 
-        for img in self.dataset['images']:
+        for img in self.data['images']:
             img['annotations'] = []
             img['categories'] = []
-            imgs[img['image_id']] = img
 
-        for ann in self.dataset['annotations']:
-            img = imgs[ann['image_id']]
-            cat = cats[ann['category_id']]
-            img['annotations'].append(ann['id'])
-            cat['annotations'].append(ann['id'])
-            
+        for instance_id, instance in self.instances:
+            img = self.imgs[instance['image_id']]
+            cat = self.cats[instance['category_id']]
+            img['annotations'].append(instance_id)
+            cat['annotations'].append(instance_id)
+
+            if cat['category_id'] not in img['categories']:
+                img['categories'].apend(cat['category_id'])
+            if img['image_id'] not in cat['images']:
+                cat['images'].append(img['image_id'])
+
+        for semantic_id, semantic in self.semantic:
+            img = self.imgs[semantic['image_id']]
+            cat = self.cats[semantic['category_id']]
+            img['annotations'].append(semantic_id)
+            cat['annotations'].append(semantic_id)
+
             if cat['category_id'] not in img['categories']:
                 img['categories'].append(cat['category_id'])
             if img['image_id'] not in cat['images']:
                 cat['images'].append(img['image_id'])
-                
-            anns[ann['id']] = ann
+
+        for occl_id, occl in self.occlusion:
+            img = self.imgs[occl['image_id']]
+            cat = self.cats[occl['category_id']]
+            img['annotations'].append(occl_id)
+            cat['annotations'].append(occl_id)
+
+            if cat['category_id'] not in img['categories']:
+                img['categories'].append(cat['category_id'])
+            if img['image_id'] not in cat['images']:
+                cat['images'].append(img['image_id'])
 
         print('index created!')
-
-        # create class members
-        self.anns = anns
-        self.imgs = imgs
-        self.cats = cats
 
     def info(self):
         """
@@ -175,8 +226,8 @@ class Detail:
 
         :param img (string/int/dict) : image that mask describes
                cat (string/int/dict) : category that mask describes
-               instance (string/int/dict) : instance that the mask describes (None
-                                            means all instances). If integer, interpreted
+               instance (string/int/dict) : instance that the mask describes (default
+                                            is all instances). If integer, interpreted
                                             as id of an "annotation" object in JSON. If
                                             string starting with #, e.g. '#0', interpreted as 0-based index
                                             of instance within the image (cat is None)
@@ -213,26 +264,26 @@ class Detail:
                     instance = self.getAnns(imgs=img, cats=([] if cat is None else cat))[int(instance[1:])]
                 else:
                     instance = int(instance)
-                
-            if type(instance) is int: 
+
+            if type(instance) is int:
                 instance = self.getAnns(instance)[0]
-            
-                    
+
+
         anns = self.getAnns(annIds=img['annotations'])
         mask = np.zeros((img['height'], img['width']))
 
-        # Generate mask based on parameter configuration
+        # Generate mask based on params
         if cat is instance is part is None:
             # Generate class mask
             for ann in anns:
                 m = self.decodeMask(ann['segmentation'])
-                mask[np.nonzero(m)] = ann['category_id']                
+                mask[np.nonzero(m)] = ann['category_id']
         elif cat is not None and instance is part is None:
             # Generate instance mask
             for ann in anns:
                 if ann['category_id'] == cat['category_id']:
                     m = self.decodeMask(ann['segmentation'])
-                    mask[np.nonzero(m)] = ann['id']            
+                    mask[np.nonzero(m)] = ann['id']
         elif instance is not None and part is None:
             # Generate part mask
             for p in instance['parts']:
@@ -293,7 +344,7 @@ class Detail:
         :return: categories (dict array)   : array of category dicts
         """
         categories = []
-        
+
         cats = cats if type(cats) == list else [cats]
         imgs = imgs if type(imgs) == list else [imgs]
 
@@ -315,7 +366,7 @@ class Detail:
             for l in range(1, len(lists)):
                 catIds = catIds.intersect(set(l))
             categories = [self.cats[catId] for catId in catIds]
-                    
+
 
 
         return categories
@@ -324,13 +375,14 @@ class Detail:
         """
         Get parts of a particular category.
         :param cat (int, string, or dict) : category to get parts for
-        :return: parts (dict array) : array of part dicts, e.g. {"name": "head", "part_id": 110}
+        :return: parts (dict array) : array of part dicts, e.g.
+        [{"name": "mouth", "superpart": "head", "part_id": 110},...]
         """
         cat = self.getCats(cat)
         assert len(cat) > 0, 'Invalid category'
         cat = cat[0]
         return list(cat['parts'])
-        
+
     def getImgs(self, imgs=[], cats=[]):
         '''
         Get images that satisfy given filter conditions.
@@ -339,7 +391,7 @@ class Detail:
         :return: images (dict array)  :  array of image dicts
         '''
         images = []
-        
+
         imgs = imgs if type(imgs) == list else [imgs]
         cats = cats if type(cats) == list else [cats]
 
@@ -347,7 +399,7 @@ class Detail:
             imgs[i] = self.__getImgId(imgs[i])
         for i in range(len(cats)):
             cats[i] = self.__getCatId(cats[i])
-            
+
         if len(imgs) == 0 and len(cats) == 0:
             images = list(self.imgs.values())
         elif len(imgs) > 0:
@@ -439,7 +491,7 @@ class Detail:
 #         """
 #         res = Detail()
 #         res.dataset['images'] = [img for img in self.dataset['images']]
-# 
+#
 #         print('Loading and preparing results...')
 #         tic = time.time()
 #         if type(resFile) == str or type(resFile) == unicode:
@@ -487,7 +539,7 @@ class Detail:
 #                 ann['id'] = id + 1
 #                 ann['bbox'] = [x0,y0,x1-x0,y1-y0]
 #         print('DONE (t={:0.2f}s)'.format(time.time()- tic))
-# 
+#
 #         res.dataset['annotations'] = anns
 #         res.createIndex()
 #         return res
@@ -517,10 +569,9 @@ class Detail:
 #                 }]
 #         return ann
 
-    def decodeMask(self, rle):
+    def decodeMask(self, json):
         """
-        Convert uncompressed RLE to binary mask.
+        Convert json mask to binary mask.
         :return: binary mask (numpy 2D array)
         """
-        return maskUtils.decode(rle)
-
+        return maskUtils.decode(json)
