@@ -18,7 +18,7 @@ ext_modules = [
 setup(name='detail',
       packages=['detail'],
       package_dir = {'detail': 'detail'},
-      version='3.0',
+      version='4.0',
       ext_modules=
           cythonize(ext_modules)
       )

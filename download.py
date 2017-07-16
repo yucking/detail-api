@@ -77,7 +77,7 @@ if sys.argv[1].lower() == 'pascal':
         print(("To download the test images, visit %s,\n"
               + "create an account, and save download.tar (about 1.13 GB) "
               + "to %s.")
-              % (VOC_TEST_URL, testTar))
+              % (VOC_TEST_URL, os.path.abspath(testTar)))
 
         s = None
         while s not in ['y','n']:
