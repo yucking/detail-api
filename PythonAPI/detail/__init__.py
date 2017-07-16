@@ -286,18 +286,21 @@ class Detail:
             instance = '#0'
 
         if instance is not None:
-            if type(instance) is str:
-                if instance.startswith('#'):
-                    # If instance is set to '#N' where N is an integer,
-                    # get the Nth (0-indexed) instance of the given category.
-                    if cat is not None:
-                        instance = self.__getSegmentationAnns(imgs=img, cats=cat)[int(instance[1:])]
+            try:
+                if type(instance) is str:
+                    if instance.startswith('#'):
+                        # If instance is set to '#N' where N is an integer,
+                        # get the Nth (0-indexed) instance of the given category.
+                        if cat is not None:
+                            instance = self.__getSegmentationAnns(imgs=img, cats=cat)[int(instance[1:])]
+                        else:
+                            instance = self.__getSegmentationAnns(imgs=img, supercat='object')[int(instance[1:])]
                     else:
-                        instance = self.__getSegmentationAnns(imgs=img, supercat='object')[int(instance[1:])]
-                else:
-                    instance = self.__getSegmentationAnns(int(instance))[0]
-            elif type(instance) is int:
-                instance = self.__getSegmentationAnns(instance)[0]
+                        instance = self.__getSegmentationAnns(int(instance))[0]
+                elif type(instance) is int:
+                    instance = self.__getSegmentationAnns(instance)[0]
+            except IndexError:
+                assert False, 'Couldn\'t find the requested instance'
 
 
         anns = self.__getSegmentationAnns(imgs=img, cats=[] if cat is None else cat,
@@ -372,7 +375,7 @@ class Detail:
 
     def showBboxes(self, bboxes, img=None):
         """
-        Display given bboxes.
+        Display given bounding boxes.
         """
         fig,ax = plt.subplots(1)
         if img is not None:
@@ -436,7 +439,8 @@ class Detail:
         Get parts of a particular category.
         :param parts (int/string/dict array) : list of parts to get
         :param cat (int, string, or dict) : category to get parts for (default: any)
-        :param superpart (string) : superpart to get parts for
+        :param superpart (string) : superpart to get parts for - one of ["object",
+                                    "background", "animal"]
         :return: parts (dict array) : array of part dicts, e.g.
         [{"name": "mouth", "superpart": "head", "part_id": 110},...]
         """
