@@ -141,7 +141,7 @@ class Detail:
                     if img['image_id'] not in part['images']:
                         part['images'].append(img['image_id'])
                     if part['part_id'] not in img['parts']:
-                        img['parts'].append(partId)
+                        img['parts'].append(part['part_id'])
 
         for occl_id, occl in self.occlusion.items():
             img = self.imgs[occl['image_id']]
@@ -232,14 +232,15 @@ class Detail:
         for ann in anns:
             bboxes.append({
                 'bbox': ann['bbox'],
-                'category': cat if type(cat) is str else cat['name']})
+                'category': self.getCats(ann['category_id'])[0]['name']})
 
         if show:
             self.showBboxes(bboxes, img)
 
     def getMask(self, img, cat=None, instance=None, superpart=None, part=None, show=False):
         """
-        Get mask for a particular level of segmentation.
+        Get mask for a particular level of segmentation. You may "drill down" to
+        the desired level of detail by specifying more parameters.
 
         If semantic segmentation of an image is requested (cat=instance=superpart=part=None), the result
         is an image whose pixel values are the class IDs for that image.
@@ -308,22 +309,21 @@ class Detail:
         mask = np.zeros((img['height'], img['width']))
 
         # Generate mask based on params
-        if not (cat or instance or part):
+        if not (cat or supercat or instance or part):
             # Generate class mask
             for ann in anns:
                 m = self.decodeMask(ann['segmentation'])
                 mask[np.nonzero(m)] = ann['category_id']
-        elif cat and not (instance or part):
-            # Generate instance mask
+        elif (cat or supercat) and not (instance or part):
+            # Generate instance (or single-class semantic) mask
             i = 1
             for ann in anns:
-                if ann['category_id'] == cat['category_id']:
-                    m = self.decodeMask(ann['segmentation'])
-                    if cat['onlysemantic']:
-                        mask[np.nonzero(m)] = 1
-                    else:
-                        mask[np.nonzero(m)] = i
-                        i = i + 1
+                m = self.decodeMask(ann['segmentation'])
+                if cat and cat['onlysemantic']:
+                    mask[np.nonzero(m)] = 1
+                else:
+                    mask[np.nonzero(m)] = i
+                    i = i + 1
         elif instance and not part:
             assert not instance['iscrowd'], 'Instance-level segmentation not available'
             # Generate part mask
@@ -356,14 +356,34 @@ class Detail:
 
         return mask
 
+    def showImg(self, img, wait=False, ax=None):
+        """
+        Display the given image
+        """
+        img = self.getImgs(img)[0]
+        jpeg = io.imread(os.path.join(self.img_folder, img['file_name']))
+
+        # print image details
+        print('showing image %s: ' % img['file_name'])
+        keys = ['image_id', 'width', 'height', 'phase', 'date_captured']
+        for k in keys:
+            print('\t%s: %s,' % (k, img[k] if img.get(k) else 'N/A'))
+
+        if ax is not None:
+            ax.imshow(jpeg)
+        else:
+            plt.imshow(jpeg)
+
+        plt.axis('off')
+        if not wait:
+            plt.show()
+
     def showMask(self, mask, img=None):
         """
         Display given mask (numpy 2D array) as a colormapped image.
         """
         if img is not None:
-            img = self.getImgs(img)[0]
-            jpeg = io.imread(os.path.join(self.img_folder, img['file_name']))
-            plt.imshow(jpeg)
+            self.showImg(img, wait=True)
 
         # Overlay mask, with 0s being transparent
         mycmap = plt.cm.jet
@@ -379,9 +399,7 @@ class Detail:
         """
         fig,ax = plt.subplots(1)
         if img is not None:
-            img = self.getImgs(img)[0]
-            jpeg = io.imread(os.path.join(self.img_folder, img['file_name']))
-            ax.imshow(jpeg)
+            self.showImg(img, wait=True, ax=ax)
 
         for bbox in bboxes:
             ax.add_patch(Rectangle((bbox['bbox'][0],bbox['bbox'][1]), bbox['bbox'][2], bbox['bbox'][3], linewidth=2,
