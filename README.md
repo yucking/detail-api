@@ -5,7 +5,7 @@ Python API for the [PASCAL in Detail](https://sites.google.com/view/pasd/dataset
 ## To install:
 Run `make` and `make install` under the [PythonAPI](PythonAPI/) directory.
 
-If you wish to use the API from MATLAB, see [MATLAB's documentation for calling Python code](https://www.mathworks.com/help/matlab/matlab_external/call-python-from-matlab.html). The Detail API no longer maintains a separate MATLAB API in addition to the Python one.
+If you wish to use the API from MATLAB, see [MATLAB's documentation for calling Python code](https://www.mathworks.com/help/matlab/matlab_external/call-python-from-matlab.html). The Detail API no longer maintains a separate MATLAB API.
 
 ## To see a demo:
 
