@@ -460,13 +460,13 @@ class Detail:
             cat = self.getCats(cat)[0]
 
         if cat is not None:
-            oldparts = parts.copy()
+            oldparts = copy.copy(parts)
             for part in oldparts:
                 if part['part_id'] not in cat['parts']:
                     parts.remove(part)
 
         if superpart is not None:
-            oldparts = parts.copy()
+            oldparts = copy.copy(parts)
             for part in oldparts:
                 if part['superpart'] != superpart:
                     parts.remove(part)
@@ -504,7 +504,7 @@ class Detail:
 
         if type(cats) is not list or len(cats) > 0:
             cats = self.getCats(cats)
-            oldimgs = imgs.copy()
+            oldimgs = copy.copy(imgs)
             for img in oldimgs:
                 for cat in cats:
                     if cat['category_id'] not in img['categories']:
@@ -513,12 +513,12 @@ class Detail:
 
         if supercat is not None:
             catIds = set([c['category_id'] for c in self.getCats(supercat=supercat)])
-            oldimgs = imgs.copy()
+            oldimgs = copy.copy(imgs)
             for img in oldimgs:
                 if len(catIds & set(img['categories'])) == 0:
                     imgs.remove(img)
 
-        oldimgs = imgs.copy()
+        oldimgs = copy.copy(imgs)
         for img in oldimgs:
             if img['phase'] not in phases:
                 imgs.remove(img)

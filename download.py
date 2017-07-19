@@ -6,7 +6,11 @@ import tarfile
 import re
 import webbrowser
 
-from urllib.request import urlretrieve
+PYTHON_VERSION = sys.version_info[0]
+if PYTHON_VERSION == 2:
+    from urllib import urlretrieve
+elif PYTHON_VERSION == 3:
+    from urllib.request import urlretrieve
 
 VOC_URL="http://host.robots.ox.ac.uk/pascal/VOC/voc2010/VOCtrainval_03-May-2010.tar"
 VOC_TEST_URL="http://host.robots.ox.ac.uk:8080/eval/downloads/VOC2010test.tar/"
