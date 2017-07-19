@@ -68,36 +68,19 @@ class Detail:
 
     def __createIndex(self):
         # create index
+        tic = time.time()
         print('creating index...')
 
         # create class members
         self.cats,self.imgs,self.segmentations,self.occlusion,self.parts= {},{},{},{},{}
 
-        phases = []
-        if "train" in self.phase: phases.append("train")
-        if "val" in self.phase: phases.append("val")
-        if "test" in self.phase: phases.append("test")
-        assert len(phases) > 0, 'Invalid phase, {}'.format(self.phase)
-
-        # Filter images and annotations according to phase
+        # Organize data into instance variables
         for img in self.data['images']:
-            if img['phase'] not in phases:
-                self.data['images'].remove(img)
-            else:
-                self.imgs[img['image_id']] = img
-
-        imgIds = list(self.imgs.keys())
+            self.imgs[img['image_id']] = img
         for segm in self.data['annos_segmentation']:
-            if segm['image_id'] not in imgIds:
-                self.data['annos_segmentation'].remove(segm)
-            else:
-                self.segmentations[segm['id']] = segm
-
+            self.segmentations[segm['id']] = segm
         for occl in self.data['annos_occlusion']:
-            if occl['image_id'] not in imgIds:
-                self.data['annos_occlusion'].remove(occl)
-            else:
-                self.occlusion[occl['image_id']] = occl
+            self.occlusion[occl['image_id']] = occl
 
         # Follow references
         for img in self.data['images']:
@@ -147,7 +130,7 @@ class Detail:
             img = self.imgs[occl['image_id']]
             img['annotations'].append(occl_id)
 
-        print('index created!')
+        print('index created! {:0.2f}s'.format(time.time() - tic))
 
     def info(self):
         """
@@ -490,15 +473,24 @@ class Detail:
 
         return parts
 
-    def getImgs(self, imgs=[], cats=[], supercat=None):
+    def getImgs(self, imgs=[], cats=[], supercat=None, phase=None):
         '''
         Get images that satisfy given filter conditions.
         :param imgs (int/string/dict array) : get imgs with given ids
         :param cats (int/string/dict array) : get imgs with all given cats
         :param supercat (string) : get imgs with the given supercategory
+        :param phase (string) : filter images by phase. If None, the phase
+                                provided to the Detail() constructor is used.
         :return: images (dict array)  :  array of image dicts
-
         '''
+        if phase is None:
+            phase = self.phase
+        phases = []
+        if "train" in phase: phases.append("train")
+        if "val" in phase: phases.append("val")
+        if "test" in phase: phases.append("test")
+        assert len(phases) > 0, 'Invalid phase, {}'.format(phase)
+
         imgs = self.__toList(imgs)
         if len(imgs) == 0:
             imgs = list(self.imgs.values())
@@ -525,6 +517,11 @@ class Detail:
             for img in oldimgs:
                 if len(catIds & set(img['categories'])) == 0:
                     imgs.remove(img)
+
+        oldimgs = imgs.copy()
+        for img in oldimgs:
+            if img['phase'] not in phases:
+                imgs.remove(img)
 
         return imgs
 

@@ -112,3 +112,5 @@ elif json_regex.match(sys.argv[1].lower()):
     urlretrieve(url, filepath + '.download', reporthook=printProgress)
     os.rename(filepath + '.download', filepath)
     print("Download complete!")
+else:
+    print('Don\'t recognize dataset %s' % sys.argv[1].lower())
