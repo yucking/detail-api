@@ -13,19 +13,32 @@ elif PYTHON_VERSION == 3:
     from urllib.request import urlretrieve
 
 VOC_URL="http://host.robots.ox.ac.uk/pascal/VOC/voc2010/VOCtrainval_03-May-2010.tar"
-VOC_TEST_URL="http://host.robots.ox.ac.uk:8080/eval/downloads/VOC2010test.tar/"
+VOC_TEST_URL="http://host.robots.ox.ac.uk/eval/downloads/VOC2010test.tar/"
 PASD_URL="https://codalabuser.blob.core.windows.net/public/%s"
 JSON_REGEX='trainval_.*'
 
 
-progress = 0
+progress = None
 json_regex = re.compile(JSON_REGEX)
+
+def input23(prompt):
+    """
+    Calls raw_input() if python 2, input() if python 3
+    """
+    if PYTHON_VERSION == 2:
+        return raw_input(prompt)
+    elif PYTHON_VERSION == 3:
+        return input(prompt)
+
 
 def printProgress(count, blockSize, totalSize):
     global progress
+    if progress is None:
+        print('Total size: %.2f GB' % (float(totalSize) / (2 ** 30)))
+        progress = 0
 
     prev_progress = progress
-    progress = int(count * blockSize / totalSize * 100)
+    progress = int(float(count * blockSize) / totalSize * 100)
     if progress > prev_progress:
         print("Download %d%% complete." % progress)
 
@@ -85,12 +98,12 @@ if sys.argv[1].lower() == 'pascal':
 
         s = None
         while s not in ['y','n']:
-            s = input('Download test images now? (opens browser) y/n: ').lower()
+            s = input23('Download test images now? (opens browser) y/n: ').lower()
         if s == 'y':
             webbrowser.open(VOC_TEST_URL)
 
         while not os.path.exists(testTar):
-            input('Press enter once download.tar is done downloading to %s.' % testTar)
+            input23('Press enter once download.tar is done downloading to %s.' % testTar)
             if not os.path.exists(testTar):
                 print("File %s doesn't exist." % os.path.abspath(testTar))
 
