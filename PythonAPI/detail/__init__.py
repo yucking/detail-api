@@ -26,7 +26,7 @@ import json
 import time
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
-from matplotlib.patches import Polygon,Rectangle
+from matplotlib.patches import Polygon,Rectangle, Circle
 import numpy as np
 import skimage.io as io
 import copy
@@ -42,7 +42,7 @@ elif PYTHON_VERSION == 3:
     from urllib.request import urlretrieve
 
 class Detail:
-    def __init__(self, annotation_file='json/trainval_merged.json',
+    def __init__(self, annotation_file='json/trainval_mergedv3.json',
                  image_folder='VOCdevkit/VOC2010/JPEGImages',
                  phase='trainval'):
         """
@@ -72,7 +72,7 @@ class Detail:
         print('creating index...')
 
         # create class members
-        self.cats,self.imgs,self.segmentations,self.occlusion,self.parts= {},{},{},{},{}
+        self.cats,self.imgs,self.segmentations,self.occlusion,self.parts,self.kpts= {},{},{},{},{},{}
 
         # Organize data into instance variables
         for img in self.data['images']:
@@ -87,6 +87,7 @@ class Detail:
             img['annotations'] = []
             img['categories'] = []
             img['parts'] = []
+            img['keypoints'] = [] # for keypoint 
 
         for part in self.data['parts']:
             part['categories'] = []
@@ -104,9 +105,23 @@ class Detail:
                     if cat['category_id'] not in part['categories']:
                         part['categories'].append(cat['category_id'])
 
+        # Add keypoint annotation 
+        imgid_map = {}  # map image_id to index of img in the list
+        for i in range(len(self.data['images'])):
+            imgid_map[self.data['images'][i]['image_id']] = i
+        for instance_id in range(len(self.data['annos_joints'])):
+            kpt = self.data['annos_joints'][instance_id]
+            kpt_imgid = kpt['image_id']
+            #kpt['bbox'] = [] # not support yet
+            kpt['instance_id'] = instance_id
+            assert(instance_id == kpt['person_id'] - 1)
+            self.kpts[instance_id] = kpt
+            self.data['images'][imgid_map[kpt_imgid]]['keypoints'].append(kpt)
+
         for segm_id, segm in self.segmentations.items():
             img = self.imgs[segm['image_id']]
             cat = self.cats[segm['category_id']]
+
             img['annotations'].append(segm_id)
             cat['annotations'].append(segm_id)
 
@@ -168,6 +183,7 @@ class Detail:
                     if type(anns[i]) is int: anns[i] = self.segmentations[anns[i]]
                     elif type(anns[i]) is dict: anns[i] = self.segmentations[anns[i]['id']]
                 except IndexError: assert False, 'Annotation with id %s not found' % anns[i]['id']
+
 
         # Filter anns according to params
         imgAnns = np.unique(np.array([img['annotations'] for img in imgs]).flatten())
@@ -339,6 +355,17 @@ class Detail:
 
         return mask
 
+    def getKpts(self, img, show=False):
+        """
+        Get human keypoints for the image.
+        :param imgs (int/string/dict array)  : get cats present in at least one of the given image names/ids
+        :return: kpts (dict array)  : array of kpts dict in the img
+        """
+        img = self.getImgs(img)[0]
+        kpts = img['keypoints']
+        if show:
+            self.showKpts(kpts, img)
+
     def showImg(self, img, wait=False, ax=None):
         """
         Display the given image
@@ -391,6 +418,33 @@ class Detail:
 
         plt.axis('off')
         plt.show()
+
+    def showKpts(self, kpts, img=None):
+        """
+        Display given kpts.
+        """
+        fig,ax = plt.subplots(1)
+        if img is not None:
+            self.showImg(img, wait=True, ax=ax)
+
+        for kpt in kpts:
+            num_kpt = len(kpt['keypoints'])/3
+            for i in range(int(num_kpt)):
+                px = kpt['keypoints'][3*i]
+                py = kpt['keypoints'][3*i+1]
+                pv = kpt['keypoints'][3*i+2]
+                if pv == 0:
+                    continue
+                pcolor = 'none'
+                if pv == 1:
+                    pcolor = 'red'
+                else:
+                    pcolor = 'blue'
+                ax.add_patch(Circle((px, py), radius=3, facecolor=pcolor))
+
+        plt.axis('off')
+        plt.show()
+
 
     def __toList(self, param):
         return param if type(param) == list else [param]
