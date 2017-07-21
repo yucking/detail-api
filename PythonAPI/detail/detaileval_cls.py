@@ -24,7 +24,7 @@ import json
 class DetailEvalCls:
     def __init__(self, detailGt=None, iouType='cls'):
         '''
-        Initialize CocoEval using coco APIs for gt and dt
+        Initialize DetailEvalCls using Detail APIs for gt 
         :param detail_gt: Detail object with ground truth annotations
         :param detail_res: Detail result file in json
         :return: None
