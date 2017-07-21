@@ -40,7 +40,7 @@ class DetailEvalCls:
         self.cats = self.detail_gt.getCats() 
         self.num_cats = len(self.cats)
         self.gt_imgs = self.detail_gt.getImgs()
-        self.num_img = len(self.gt_imgs())
+        self.num_img = len(self.gt_imgs)
         print('Total category #%d, total img #%d '%(self.num_cats, self.num_img))
         self.createIndex()
  
