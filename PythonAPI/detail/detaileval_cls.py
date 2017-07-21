@@ -39,7 +39,8 @@ class DetailEvalCls:
         
         self.cats = self.detail_gt.getCats() 
         self.num_cats = len(self.cats)
-        self.num_img = len(self.detail_gt.getImgs())
+        self.gt_imgs = self.detail_gt.getImgs()
+        self.num_img = len(self.gt_imgs())
         print('Total category #%d, total img #%d '%(self.num_cats, self.num_img))
         self.createIndex()
  
@@ -48,7 +49,6 @@ class DetailEvalCls:
         createIndex to convert imgIds to gt_idx
         '''
         self.gt_idxs = {} #np.zeros([self.num_img])
-        self.gt_imgs = self.detail_gt.getImgs()
         for i in range(self.num_img):
             self.gt_idxs[self.gt_imgs[i]['image_id']] = i
         self.cat_idxs = {} #np.zeros([self.num_img])
@@ -70,7 +70,7 @@ class DetailEvalCls:
         '''
         Evaluation of image classification task
         Run per image evaluation on all images in the set 
-        :return: None
+        :return: map 
         '''
         assert(self.is_res_load)
         #print('Running per image evaluation...')
