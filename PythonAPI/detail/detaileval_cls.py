@@ -11,7 +11,8 @@ __version__ = '4.0'
 # from detail import DetailEvalCls
 
 # PASCAL in Detail Toolbox     version 4.0
-
+# TODO: Check the super_catergory of the classification
+# TODO: Add param support, like support for evaluation on part of the imgs and categories
 import numpy as np
 import datetime
 import time
