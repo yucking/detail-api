@@ -26,7 +26,7 @@ import json
 import time
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
-from matplotlib.patches import Polygon,Rectangle, Circle
+from matplotlib.patches import Polygon,Rectangle,Circle,Arrow
 import numpy as np
 import skimage.io as io
 import copy
@@ -106,6 +106,7 @@ class Detail:
                         part['categories'].append(cat['category_id'])
 
         # Add keypoint annotation 
+        self.keypoints_str = ['head', 'neck', 'lsho', 'lelb', 'lhip', 'lwri', 'lknee', 'lank', 'rsho', 'relb', 'rwri', 'rhip', 'rknee', 'rank']
         imgid_map = {}  # map image_id to index of img in the list
         for i in range(len(self.data['images'])):
             imgid_map[self.data['images'][i]['image_id']] = i
@@ -121,7 +122,6 @@ class Detail:
         for segm_id, segm in self.segmentations.items():
             img = self.imgs[segm['image_id']]
             cat = self.cats[segm['category_id']]
-
             img['annotations'].append(segm_id)
             cat['annotations'].append(segm_id)
 
@@ -183,7 +183,6 @@ class Detail:
                     if type(anns[i]) is int: anns[i] = self.segmentations[anns[i]]
                     elif type(anns[i]) is dict: anns[i] = self.segmentations[anns[i]['id']]
                 except IndexError: assert False, 'Annotation with id %s not found' % anns[i]['id']
-
 
         # Filter anns according to params
         imgAnns = np.unique(np.array([img['annotations'] for img in imgs]).flatten())
@@ -426,21 +425,34 @@ class Detail:
         fig,ax = plt.subplots(1)
         if img is not None:
             self.showImg(img, wait=True, ax=ax)
-
+        pv = np.zeros(14)
+        px = np.zeros(14)
+        py = np.zeros(14)
         for kpt in kpts:
             num_kpt = len(kpt['keypoints'])/3
             for i in range(int(num_kpt)):
-                px = kpt['keypoints'][3*i]
-                py = kpt['keypoints'][3*i+1]
-                pv = kpt['keypoints'][3*i+2]
-                if pv == 0:
+                px[i] = kpt['keypoints'][3*i]
+                py[i] = kpt['keypoints'][3*i+1]
+                pv[i] = kpt['keypoints'][3*i+2]
+                if pv[i] == 0:
                     continue
                 pcolor = 'none'
-                if pv == 1:
+                if pv[i] == 1:
                     pcolor = 'red'
                 else:
                     pcolor = 'blue'
-                ax.add_patch(Circle((px, py), radius=3, facecolor=pcolor))
+                ax.add_patch(Circle((px[i], py[i]), radius=3, facecolor=pcolor))
+            kpt_pair = [[0, 1], [1, 2], [2, 3], [3, 4], [2, 5], [5, 6], [6, 7], [1, 8], [8, 9], [9, 10], [8, 11], [11, 12], [12, 13]]
+            for p in kpt_pair:
+                p0 = p[0]
+                p1 = p[1]
+                if pv[p0] == 0 or pv[p1] == 0:
+                    continue
+                if pv[p0] == 2 or pv[p1] == 2:
+                    pcolor = 'blue'
+                else:
+                    pcolor = 'red'
+                ax.add_patch(Arrow(px[p0], py[p0], px[p1]-px[p0], py[p1]-py[p0], width=2.0, facecolor=pcolor))
 
         plt.axis('off')
         plt.show()
