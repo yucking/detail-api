@@ -105,10 +105,12 @@ class Detail:
                     if cat['category_id'] not in part['categories']:
                         part['categories'].append(cat['category_id'])
 
-
+        
         try: # I cannot run this code, maybe my data is out-of-date? -- Zhishuai
             assert(os.getlogin()=='zhishuaizhang')
         except: # I add this code to make my code running, and shouldn't affect other people
+            print(self.data.keys())
+            assert 'annos_joints' in self.data.keys(), 'annos_joints can not found in json data, please update the json!'
             self.keypoints_str = ['head', 'neck', 'lsho', 'lelb', 'lhip', 'lwri', 'lknee', 'lank', 'rsho', 'relb', 'rwri', 'rhip', 'rknee', 'rank']
             imgid_map = {}  # map image_id to index of img in the list
             for i in range(len(self.data['images'])):
