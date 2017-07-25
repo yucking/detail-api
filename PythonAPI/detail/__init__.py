@@ -107,8 +107,7 @@ class Detail:
 
 
         try: # I cannot run this code, maybe my data is out-of-date? -- Zhishuai
-            assert('load keypoint API failed, please check if the json data is up-to-date!')
-            # assert(os.getlogin()=='zhishuaizhang')
+            assert(os.getlogin()=='zhishuaizhang')
         except: # I add this code to make my code running, and shouldn't affect other people
             self.keypoints_str = ['head', 'neck', 'lsho', 'lelb', 'lhip', 'lwri', 'lknee', 'lank', 'rsho', 'relb', 'rwri', 'rhip', 'rknee', 'rank']
             imgid_map = {}  # map image_id to index of img in the list
