@@ -92,16 +92,11 @@ class DetailEvalKpt:
                 img_kpt_list[i]['id'] = count
                 count += 1
                 img_kpt_list[i]['ignore'] = (img_kpt_list[i]['num_keypoints'] == 0) or False
-            ## add 'area' to list:
-            
                 bb = img_kpt_list[i]['bbox']
                 img_kpt_list[i]['area'] = bb[2] * bb[3]
                 assert(img_kpt_list[i]['area'] > 0)
             self._gts[gt['image_id'], category_id] = img_kpt_list
-            #peint
-        #count = 0
         for count, dt in enumerate(self.results):
-            # print(dt)
             dt['id'] = count
             s = dt['keypoints']
             x = s[0::3]
