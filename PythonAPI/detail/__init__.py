@@ -87,7 +87,7 @@ class Detail:
             img['annotations'] = []
             img['categories'] = []
             img['parts'] = []
-            img['keypoints'] = [] # for keypoint 
+            img['keypoints'] = [] # for keypoint
 
         for part in self.data['parts']:
             part['categories'] = []
@@ -105,19 +105,23 @@ class Detail:
                     if cat['category_id'] not in part['categories']:
                         part['categories'].append(cat['category_id'])
 
-        # Add keypoint annotation 
-        self.keypoints_str = ['head', 'neck', 'lsho', 'lelb', 'lhip', 'lwri', 'lknee', 'lank', 'rsho', 'relb', 'rwri', 'rhip', 'rknee', 'rank']
-        imgid_map = {}  # map image_id to index of img in the list
-        for i in range(len(self.data['images'])):
-            imgid_map[self.data['images'][i]['image_id']] = i
-        for instance_id in range(len(self.data['annos_joints'])):
-            kpt = self.data['annos_joints'][instance_id]
-            kpt_imgid = kpt['image_id']
-            #kpt['bbox'] = [] # not support yet
-            kpt['instance_id'] = instance_id
-            assert(instance_id == kpt['person_id'] - 1)
-            self.kpts[instance_id] = kpt
-            self.data['images'][imgid_map[kpt_imgid]]['keypoints'].append(kpt)
+
+        try: # I cannot run this code, maybe my data is out-of-date? -- Zhishuai
+            assert('load keypoint API failed, please check if the json data is up-to-date!')
+            # assert(os.getlogin()=='zhishuaizhang')
+        except: # I add this code to make my code running, and shouldn't affect other people
+            self.keypoints_str = ['head', 'neck', 'lsho', 'lelb', 'lhip', 'lwri', 'lknee', 'lank', 'rsho', 'relb', 'rwri', 'rhip', 'rknee', 'rank']
+            imgid_map = {}  # map image_id to index of img in the list
+            for i in range(len(self.data['images'])):
+                imgid_map[self.data['images'][i]['image_id']] = i
+            for instance_id in range(len(self.data['annos_joints'])):
+                kpt = self.data['annos_joints'][instance_id]
+                kpt_imgid = kpt['image_id']
+                #kpt['bbox'] = [] # not support yet
+                kpt['instance_id'] = instance_id
+                assert(instance_id == kpt['person_id'] - 1)
+                self.kpts[instance_id] = kpt
+                self.data['images'][imgid_map[kpt_imgid]]['keypoints'].append(kpt)
 
         for segm_id, segm in self.segmentations.items():
             img = self.imgs[segm['image_id']]
@@ -234,6 +238,7 @@ class Detail:
 
         if show:
             self.showBboxes(bboxes, img)
+        return bboxes
 
     def getMask(self, img, cat=None, instance=None, superpart=None, part=None, show=False):
         """
@@ -597,6 +602,17 @@ class Detail:
         :return: binary mask (numpy 2D array)
         """
         return maskUtils.decode(json)
+
+    def find_cat(self,index): # Zhishuai
+        try:
+            assert len(self.cats_mapping)>0
+        except:
+            self.cats_mapping=[(_['category_id'],_['name']) for _ in self.getCats()]
+        if type(index)==int:
+            return self.cats_mapping[[_[0] for _ in self.cats_mapping].index(index)][1]
+        elif type(index)==str:
+            return self.cats_mapping[[_[1] for _ in self.cats_mapping].index(index)][0]
+
 
     # From COCO API...not implemented for PASCAL in Detail
 #     def showAnns(self, anns):
