@@ -6,7 +6,7 @@ __version__ = '4.0'
 # information about the PASCAL in Detail challenge. For example usage of the
 # detail API, see detailDemo.ipynb.
 
-# Throughout the API "ann"=annotation, "cat"=category, and "img"=image.
+# Throughout the API "ann"=annotation, "cat"=category, "img"=image, "kpts"=keypoints.
 
 # To import:
 # from detail import Detail
@@ -26,7 +26,8 @@ import json
 import time
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
-from matplotlib.patches import Polygon,Rectangle
+from matplotlib.patches import Polygon,Rectangle,Circle,Arrow
+import matplotlib.colors
 import numpy as np
 import skimage.io as io
 import copy
@@ -42,7 +43,7 @@ elif PYTHON_VERSION == 3:
     from urllib.request import urlretrieve
 
 class Detail:
-    def __init__(self, annotation_file='json/trainval_merged.json',
+    def __init__(self, annotation_file='json/trainval_withkeypoints.json',
                  image_folder='VOCdevkit/VOC2010/JPEGImages',
                  phase='trainval'):
         """
@@ -72,7 +73,7 @@ class Detail:
         print('creating index...')
 
         # create class members
-        self.cats,self.imgs,self.segmentations,self.occlusion,self.parts= {},{},{},{},{}
+        self.cats,self.imgs,self.segmentations,self.occlusion,self.parts,self.kpts= {},{},{},{},{},{}
 
         # Organize data into instance variables
         for img in self.data['images']:
@@ -87,6 +88,7 @@ class Detail:
             img['annotations'] = []
             img['categories'] = []
             img['parts'] = []
+            img['keypoints'] = [] # for keypoint
 
         for part in self.data['parts']:
             part['categories'] = []
@@ -103,6 +105,25 @@ class Detail:
                     part = self.parts[partId]
                     if cat['category_id'] not in part['categories']:
                         part['categories'].append(cat['category_id'])
+
+
+        try: # I cannot run this code, maybe my data is out-of-date? -- Zhishuai
+            assert(os.getlogin()=='zhishuaizhang')
+        except: # I add this code to make my code running, and shouldn't affect other people
+            print(self.data.keys())
+            assert 'annos_joints' in self.data.keys(), 'annos_joints can not found in json data, please update the json!'
+            self.keypoints_str = ['head', 'neck', 'lsho', 'lelb', 'lhip', 'lwri', 'lknee', 'lank', 'rsho', 'relb', 'rwri', 'rhip', 'rknee', 'rank']
+            imgid_map = {}  # map image_id to index of img in the list
+            for i in range(len(self.data['images'])):
+                imgid_map[self.data['images'][i]['image_id']] = i
+            for instance_id in range(len(self.data['annos_joints'])):
+                kpt = self.data['annos_joints'][instance_id]
+                kpt_imgid = kpt['image_id']
+                #kpt['bbox'] = [] # not support yet
+                kpt['instance_id'] = instance_id
+                assert(instance_id == kpt['person_id'] - 1)
+                self.kpts[instance_id] = kpt
+                self.data['images'][imgid_map[kpt_imgid]]['keypoints'].append(kpt)
 
         for segm_id, segm in self.segmentations.items():
             img = self.imgs[segm['image_id']]
@@ -219,6 +240,7 @@ class Detail:
 
         if show:
             self.showBboxes(bboxes, img)
+        return bboxes
 
     def getMask(self, img, cat=None, instance=None, superpart=None, part=None, show=False):
         """
@@ -339,6 +361,17 @@ class Detail:
 
         return mask
 
+    def getKpts(self, img, show=False):
+        """
+        Get human keypoints for the image.
+        :param imgs (int/string/dict array)  : get cats present in at least one of the given image names/ids
+        :return: kpts (dict array)  : array of kpts dict in the img
+        """
+        img = self.getImgs(img)[0]
+        kpts = img['keypoints']
+        if show:
+            self.showKpts(kpts, img)
+
     def showImg(self, img, wait=False, ax=None):
         """
         Display the given image
@@ -368,13 +401,16 @@ class Detail:
         if img is not None:
             self.showImg(img, wait=True)
 
-        # Overlay mask, with 0s being transparent
-        mycmap = plt.cm.jet
+        # Draw mask, random colormap, 0s transparent
+        mycmap = self.__genRandColormap()
         mycmap.set_under(alpha=0.0)
-        nonzero = mask[np.nonzero(mask)]
+        nonzero = np.unique(mask[np.nonzero(mask)])
         plt.imshow(mask, cmap=mycmap, vmin=np.min(nonzero), vmax=np.max(nonzero)+1)
         plt.axis('off')
         plt.show()
+
+    def __genRandColormap(self):
+        return matplotlib.colors.ListedColormap(np.random.rand (256,3))
 
     def showBboxes(self, bboxes, img=None):
         """
@@ -386,11 +422,51 @@ class Detail:
 
         for bbox in bboxes:
             ax.add_patch(Rectangle((bbox['bbox'][0],bbox['bbox'][1]), bbox['bbox'][2], bbox['bbox'][3], linewidth=2,
-                                   edgecolor='r', facecolor='none'))
+                                   edgecolor=np.random.rand(3), facecolor='none'))
         print('categories: %s' % [bbox['category'] for bbox in bboxes])
 
         plt.axis('off')
         plt.show()
+
+    def showKpts(self, kpts, img=None):
+        """
+        Display given kpts.
+        """
+        fig,ax = plt.subplots(1)
+        if img is not None:
+            self.showImg(img, wait=True, ax=ax)
+        pv = np.zeros(14)
+        px = np.zeros(14)
+        py = np.zeros(14)
+        for kpt in kpts:
+            num_kpt = len(kpt['keypoints'])/3
+            for i in range(int(num_kpt)):
+                px[i] = kpt['keypoints'][3*i]
+                py[i] = kpt['keypoints'][3*i+1]
+                pv[i] = kpt['keypoints'][3*i+2]
+                if pv[i] == 0:
+                    continue
+                pcolor = 'none'
+                if pv[i] == 1:
+                    pcolor = 'red'
+                else:
+                    pcolor = 'blue'
+                ax.add_patch(Circle((px[i], py[i]), radius=3, facecolor=pcolor))
+            kpt_pair = [[0, 1], [1, 2], [2, 3], [3, 4], [2, 5], [5, 6], [6, 7], [1, 8], [8, 9], [9, 10], [8, 11], [11, 12], [12, 13]]
+            for p in kpt_pair:
+                p0 = p[0]
+                p1 = p[1]
+                if pv[p0] == 0 or pv[p1] == 0:
+                    continue
+                if pv[p0] == 2 or pv[p1] == 2:
+                    pcolor = 'blue'
+                else:
+                    pcolor = 'red'
+                ax.add_patch(Arrow(px[p0], py[p0], px[p1]-px[p0], py[p1]-py[p0], width=2.0, facecolor=pcolor))
+
+        plt.axis('off')
+        plt.show()
+
 
     def __toList(self, param):
         return param if type(param) == list else [param]
@@ -434,6 +510,19 @@ class Detail:
             cats = [cat for cat in cats if not cat['onlysemantic'] == with_instances]
 
         return cats
+
+    def getSuperparts(self, cat=None):
+        """
+        Get list of all defined superparts.
+        :return: superparts (string array): list of superpart names
+        """
+        superparts = set()
+        parts = self.getParts(cat=cat)
+        for part in parts:
+            if part['superpart'] != 'none':
+                superparts.add(part['superpart'])
+
+        return list(superparts)
 
     def getParts(self, parts=[], cat=None, superpart=None):
         """
@@ -531,6 +620,17 @@ class Detail:
         :return: binary mask (numpy 2D array)
         """
         return maskUtils.decode(json)
+
+    def find_cat(self,index): # Zhishuai
+        try:
+            assert len(self.cats_mapping)>0
+        except:
+            self.cats_mapping=[(_['category_id'],_['name']) for _ in self.getCats()]
+        if type(index)==int:
+            return self.cats_mapping[[_[0] for _ in self.cats_mapping].index(index)][1]
+        elif type(index)==str:
+            return self.cats_mapping[[_[1] for _ in self.cats_mapping].index(index)][0]
+
 
     # From COCO API...not implemented for PASCAL in Detail
 #     def showAnns(self, anns):
