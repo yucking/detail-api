@@ -6,7 +6,7 @@ __version__ = '4.0'
 # information about the PASCAL in Detail challenge. For example usage of the
 # detail API, see detailDemo.ipynb.
 
-# Throughout the API "ann"=annotation, "cat"=category, and "img"=image.
+# Throughout the API "ann"=annotation, "cat"=category, "img"=image, "kpts"=keypoints.
 
 # To import:
 # from detail import Detail
@@ -27,6 +27,7 @@ import time
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Polygon,Rectangle,Circle,Arrow
+import matplotlib.colors
 import numpy as np
 import skimage.io as io
 import copy
@@ -42,7 +43,7 @@ elif PYTHON_VERSION == 3:
     from urllib.request import urlretrieve
 
 class Detail:
-    def __init__(self, annotation_file='json/trainval_mergedv3.json',
+    def __init__(self, annotation_file='json/trainval_withkeypoints.json',
                  image_folder='VOCdevkit/VOC2010/JPEGImages',
                  phase='trainval'):
         """
@@ -105,7 +106,7 @@ class Detail:
                     if cat['category_id'] not in part['categories']:
                         part['categories'].append(cat['category_id'])
 
-        
+
         try: # I cannot run this code, maybe my data is out-of-date? -- Zhishuai
             assert(os.getlogin()=='zhishuaizhang')
         except: # I add this code to make my code running, and shouldn't affect other people
@@ -400,13 +401,16 @@ class Detail:
         if img is not None:
             self.showImg(img, wait=True)
 
-        # Overlay mask, with 0s being transparent
-        mycmap = plt.cm.jet
+        # Draw mask, random colormap, 0s transparent
+        mycmap = self.__genRandColormap()
         mycmap.set_under(alpha=0.0)
-        nonzero = mask[np.nonzero(mask)]
+        nonzero = np.unique(mask[np.nonzero(mask)])
         plt.imshow(mask, cmap=mycmap, vmin=np.min(nonzero), vmax=np.max(nonzero)+1)
         plt.axis('off')
         plt.show()
+
+    def __genRandColormap(self):
+        return matplotlib.colors.ListedColormap(np.random.rand (256,3))
 
     def showBboxes(self, bboxes, img=None):
         """
@@ -418,7 +422,7 @@ class Detail:
 
         for bbox in bboxes:
             ax.add_patch(Rectangle((bbox['bbox'][0],bbox['bbox'][1]), bbox['bbox'][2], bbox['bbox'][3], linewidth=2,
-                                   edgecolor='r', facecolor='none'))
+                                   edgecolor=np.random.rand(3), facecolor='none'))
         print('categories: %s' % [bbox['category'] for bbox in bboxes])
 
         plt.axis('off')
@@ -506,6 +510,19 @@ class Detail:
             cats = [cat for cat in cats if not cat['onlysemantic'] == with_instances]
 
         return cats
+
+    def getSuperparts(self, cat=None):
+        """
+        Get list of all defined superparts.
+        :return: superparts (string array): list of superpart names
+        """
+        superparts = set()
+        parts = self.getParts(cat=cat)
+        for part in parts:
+            if part['superpart'] != 'none':
+                superparts.add(part['superpart'])
+
+        return list(superparts)
 
     def getParts(self, parts=[], cat=None, superpart=None):
         """
