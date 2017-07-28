@@ -7,7 +7,8 @@ __version__ = '4.0'
 # detail API, see detailDemo.ipynb.
 
 # Throughout the API "ann"=annotation, "cat"=category, "img"=image,
-# "bbox"= bounding box, "kpts"=keypoints.
+# "bbox"= bounding box, "kpts"=keypoints, "occl"=occlusion,
+# "bounds"=boundaries.
 
 # To import:
 # from detail import Detail
@@ -44,7 +45,7 @@ if PYTHON_VERSION == 2:
 elif PYTHON_VERSION == 3:
     from urllib.request import urlretrieve
 
-# When displaying boundaries, dilate the mask before displaying it to
+# When displaying boundaries, dilate the mask before displaying it, to
 # improve visibility
 NUM_BOUNDARY_DILATION_ITERATIONS = 1
 
@@ -206,8 +207,15 @@ class Detail:
 
     # getX() functions #
 
-    #def getOccl(self, img, anns=[], show=False):
-        # TODO
+    def getOccl(self, img, show=False):
+        img = self.getImgs(img)[0]
+
+        occl = self.occlusion[img['image_id']]
+
+        if show:
+            self.showOccl(occl, img)
+
+        return occl
 
     def getBounds(self, img, show=False):
         """
@@ -225,19 +233,6 @@ class Detail:
                 print('Mask is empty')
 
         return mask
-
-    def showBounds(self, mask, img):
-        """
-        Dilate mask before passing it to showMask()
-        """
-        img = self.getImgs(img)[0]
-
-        # dilate mask (creates new ndarray of bools)
-        mask = binary_dilation(mask, iterations=NUM_BOUNDARY_DILATION_ITERATIONS)
-
-        # show mask
-        self.showMask(mask, img)
-
 
     def getBboxes(self, img, cat='object', show=False):
         """
@@ -484,13 +479,13 @@ class Detail:
             cat = self.getCats(cat)[0]
 
         if cat is not None:
-            oldparts = parts.copy()
+            oldparts = copy.copy(parts)
             for part in oldparts:
                 if part['part_id'] not in cat['parts']:
                     parts.remove(part)
 
         if superpart is not None:
-            oldparts = parts.copy()
+            oldparts = copy.copy(parts)
             for part in oldparts:
                 if part['superpart'] != superpart:
                     parts.remove(part)
@@ -528,7 +523,7 @@ class Detail:
 
         if type(cats) is not list or len(cats) > 0:
             cats = self.getCats(cats)
-            oldimgs = imgs.copy()
+            oldimgs = copy.copy(imgs)
             for img in oldimgs:
                 for cat in cats:
                     if cat['category_id'] not in img['categories']:
@@ -537,12 +532,12 @@ class Detail:
 
         if supercat is not None:
             catIds = set([c['category_id'] for c in self.getCats(supercat=supercat)])
-            oldimgs = imgs.copy()
+            oldimgs = copy.copy(imgs)
             for img in oldimgs:
                 if len(catIds & set(img['categories'])) == 0:
                     imgs.remove(img)
 
-        oldimgs = imgs.copy()
+        oldimgs = copy.copy(imgs)
         for img in oldimgs:
             if img['phase'] not in phases:
                 imgs.remove(img)
@@ -644,6 +639,37 @@ class Detail:
 
         plt.axis('off')
         plt.show()
+
+    def showBounds(self, mask, img):
+        """
+        Dilate mask before passing it to showMask()
+        """
+        img = self.getImgs(img)[0]
+
+        # dilate mask (creates new ndarray of bools)
+        mask = binary_dilation(mask, iterations=NUM_BOUNDARY_DILATION_ITERATIONS)
+
+        # show mask
+        self.showMask(mask, img)
+
+    def showOccl(self, occl, img):
+        """
+        Dilate mask before passing it to showMask()
+        """
+        img = self.getImgs(img)[0]
+
+        # dilate mask (creates new ndarray of bools)
+        bounds = np.zeros(occl['imsize'])
+        for i in range(occl['ne']): # ne = "number of edges"
+            pixel_indices = occl['edges']['indices'][i]
+            pixel_coords = np.unravel_index(pixel_indices, occl['imsize'], order='F')
+            bounds[pixel_coords] = 1
+
+        # show mask
+        self.showMask(bounds, img)
+
+        # Draw arrows
+
 
     # Helper functions #
 
