@@ -95,18 +95,27 @@ class Detail:
             part['annotations'] = []
             part['images'] = []
             self.parts[part['part_id']] = part
-
-        for cat in self.data['categories']:
+            
+        # fixed eval_orders here for classification task
+        eval_orders = [2, 23, 25, 31, 34, 45, 59, 65, 72, 98, 397, 113, 207, 258, 284, 308, 347, 368, 416, 427, 9, 18, 22, 33, 44, 46, 68, 80, 85, 104, 115, 144, 158, 159, 162, 187, 189, 220, 232, 259, 260, 105, 296, 355, 295, 324, 326, 349, 354, 360, 366, 19, 415, 420, 424, 440, 445, 454, 458]
+        for i in eval_orders:
+            self.eval_orders[i] = eval_orders[i]
+        for order, cat in enumerate(self.data['categories']):
             cat['images'] = []
             cat['annotations'] = []
+            #print('adding cat id: %d'%(cat['category_id']))
             self.cats[cat['category_id']] = cat
+            # self.eval_orders[order] = cat['category_id']
             if cat.get('parts'):
                 for partId in cat['parts']:
                     part = self.parts[partId]
                     if cat['category_id'] not in part['categories']:
                         part['categories'].append(cat['category_id'])
 
-
+        #print('done show cats:')
+        #ids = sorted(self.cats.keys())
+        #for i, catsid in enumerate(ids):
+        #    self.cats_order[i] = catsid
         try: # I cannot run this code, maybe my data is out-of-date? -- Zhishuai
             assert(os.getlogin()=='zhishuaizhang')
         except: # I add this code to make my code running, and shouldn't affect other people
@@ -508,7 +517,7 @@ class Detail:
 
         if with_instances is not None:
             cats = [cat for cat in cats if not cat['onlysemantic'] == with_instances]
-
+        
         return cats
 
     def getSuperparts(self, cat=None):
