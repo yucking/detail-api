@@ -97,8 +97,9 @@ class Detail:
             self.parts[part['part_id']] = part
             
         # fixed eval_orders here for classification task
+        self.eval_orders = {}
         eval_orders = [2, 23, 25, 31, 34, 45, 59, 65, 72, 98, 397, 113, 207, 258, 284, 308, 347, 368, 416, 427, 9, 18, 22, 33, 44, 46, 68, 80, 85, 104, 115, 144, 158, 159, 162, 187, 189, 220, 232, 259, 260, 105, 296, 355, 295, 324, 326, 349, 354, 360, 366, 19, 415, 420, 424, 440, 445, 454, 458]
-        for i in eval_orders:
+        for i in range(len(eval_orders)):
             self.eval_orders[i] = eval_orders[i]
         for order, cat in enumerate(self.data['categories']):
             cat['images'] = []
