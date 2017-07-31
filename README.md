@@ -16,4 +16,4 @@ If you wish to use the API from MATLAB, see [MATLAB's documentation for calling 
 
 ## To see a demo:
 
-Run the IPython notebook [PythonAPI/detailDemo.ipynb](PythonAPI/detailDemo.ipynb).
+Run the IPython notebook [PythonAPI/ipynb/detailDemo.ipynb](PythonAPI/ipynb/detailDemo.ipynb).
