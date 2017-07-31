@@ -7,7 +7,8 @@ __version__ = '4.0'
 # detail API, see detailDemo.ipynb.
 
 # Throughout the API "ann"=annotation, "cat"=category, "img"=image,
-# "bbox"= bounding box, "kpts"=keypoints.
+# "bbox"= bounding box, "kpts"=keypoints, "occl"=occlusion,
+# "bounds"=boundaries.
 
 # To import:
 # from detail import Detail
@@ -115,7 +116,7 @@ class Detail:
             part['annotations'] = []
             part['images'] = []
             self.parts[part['part_id']] = part
-            
+
         # fixed eval_orders here for classification task
         self.eval_orders = {}
         eval_orders = [2, 23, 25, 31, 34, 45, 59, 65, 72, 98, 397, 113, 207, 258, 284, 308, 347, 368, 416, 427, 9, 18, 22, 33, 44, 46, 68, 80, 85, 104, 115, 144, 158, 159, 162, 187, 189, 220, 232, 259, 260, 105, 296, 355, 295, 324, 326, 349, 354, 360, 366, 19, 415, 420, 424, 440, 445, 454, 458]
@@ -239,8 +240,15 @@ class Detail:
 
     # getX() functions #
 
-    #def getOccl(self, img, anns=[], show=False):
-        # TODO
+    def getOccl(self, img, show=False):
+        img = self.getImgs(img)[0]
+
+        occl = self.occlusion[img['image_id']]
+
+        if show:
+            self.showOccl(occl, img)
+
+        return occl
 
     def getBounds(self, img, show=False):
         """
@@ -258,19 +266,6 @@ class Detail:
                 print('Mask is empty')
 
         return mask
-
-    def showBounds(self, mask, img):
-        """
-        Dilate mask before passing it to showMask()
-        """
-        img = self.getImgs(img)[0]
-
-        # dilate mask (creates new ndarray of bools)
-        mask = binary_dilation(mask, iterations=NUM_BOUNDARY_DILATION_ITERATIONS)
-
-        # show mask
-        self.showMask(mask, img)
-
 
     def getBboxes(self, img, cat='object', show=False):
         """
@@ -476,7 +471,7 @@ class Detail:
 
         if with_instances is not None:
             cats = [cat for cat in cats if not cat['onlysemantic'] == with_instances]
-        
+
         return cats
 
     def getSuperparts(self, cat=None):
