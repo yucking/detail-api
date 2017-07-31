@@ -138,27 +138,6 @@ class Detail:
         self.keypoints_str = ['head', 'neck', 'lsho', 'lelb', 'lhip', 'lwri', 'lknee', 'lank', 'rsho', 'relb', 'rwri', 'rhip', 'rknee', 'rank']
         for skeleton_id, skeleton in self.kpts.items():
              self.imgs[skeleton['image_id']]['keypoints'].append(skeleton_id)
-        #print('done show cats:')
-        #ids = sorted(self.cats.keys())
-        #for i, catsid in enumerate(ids):
-        #    self.cats_order[i] = catsid
-        try: # I cannot run this code, maybe my data is out-of-date? -- Zhishuai
-            assert(os.getlogin()=='zhishuaizhang')
-        except: # I add this code to make my code running, and shouldn't affect other people
-            print(self.data.keys())
-            assert 'annos_joints' in self.data.keys(), 'annos_joints can not found in json data, please update the json!'
-            self.keypoints_str = ['head', 'neck', 'lsho', 'lelb', 'lhip', 'lwri', 'lknee', 'lank', 'rsho', 'relb', 'rwri', 'rhip', 'rknee', 'rank']
-            imgid_map = {}  # map image_id to index of img in the list
-            for i in range(len(self.data['images'])):
-                imgid_map[self.data['images'][i]['image_id']] = i
-            for instance_id in range(len(self.data['annos_joints'])):
-                kpt = self.data['annos_joints'][instance_id]
-                kpt_imgid = kpt['image_id']
-                #kpt['bbox'] = [] # not support yet
-                kpt['instance_id'] = instance_id
-                assert(instance_id == kpt['person_id'] - 1)
-                self.kpts[instance_id] = kpt
-                self.data['images'][imgid_map[kpt_imgid]]['keypoints'].append(kpt)
 
         for segm_id, segm in self.segmentations.items():
             img = self.imgs[segm['image_id']]
