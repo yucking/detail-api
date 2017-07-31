@@ -51,9 +51,9 @@ class DetailEvalCls:
         self.gt_idxs = {} #np.zeros([self.num_img])
         for i in range(self.num_img):
             self.gt_idxs[self.gt_imgs[i]['image_id']] = i
-        self.cat_idxs = {} #np.zeros([self.num_img])
-        for i in range(self.num_cats):
-            self.cat_idxs[self.cats[i]['category_id']] = i
+        #self.cat_idxs = {} #np.zeros([self.num_img])
+        #for i in range(self.num_cats):
+        #    self.cat_idxs[self.cats[i]['category_id']] = i
 
     def loadRes(self, detailRes):  
         # TODO: check if input is string or dict
@@ -78,20 +78,20 @@ class DetailEvalCls:
         voc_ap = np.zeros(self.num_cats)
         record = {}
         record['cat_ap'] = [] 
-        for i in range(self.num_cats):
-            cat = self.cats[i]
+        for eval_order in range(self.num_cats):
+            category_id = self.detail_gt.eval_orders[eval_order]
+            cat = self.detail_gt.getCats([category_id])[0] #self.cats[i]
             #print('Evaluating class: %s(%d)...'%(cat['name'], cat['category_id']))
-            voc_eval = self.VOCevalcls(i)
-            voc_ap[i] = voc_eval['ap']
+            voc_eval = self.VOCevalcls(eval_order, category_id)
+            voc_ap[eval_order] = voc_eval['ap']
             if plot: 
                 import matplotlib.pyplot as plt
                 print(voc_eval['rec'], voc_eval['prec'])
                 plt.plot(voc_eval['rec'], voc_eval['prec'])
                 plt.show()
-            
-            record['cat_ap'].append({'category_id':cat['category_id'], 'name': cat['name'], 'ap':voc_ap[i]})
+            record['cat_ap'].append({'category_id':cat['category_id'], 'name': cat['name'], 'ap':voc_ap[eval_order]})
         # average ap
-        record['map'] = voc_ap.mean()
+        record['map'] = voc_ap.sum()/float(len(record['cat_ap']))
         #TODO: print stats as COCO?
         [print(record_single) for record_single in record['cat_ap']]
         print('======= \n Mean ap over #%d categories %f'%(self.num_cats, record['map']))
@@ -110,25 +110,30 @@ class DetailEvalCls:
         ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
         return ap
    
-    def VOCevalcls(self, cat_idx):
+    def VOCevalcls(self, eval_order, cat_id):
         '''
         Evaluate per category AP and average over number of category to get meanAP
         Follow the evaluation in VOC2010 Toolbox
         '''
         # imgs = self.detail_gt.getImgs(cats=cat['name']);
-        cat_id = self.cats[cat_idx]['category_id']
+        # cat_id = self.cats[cat_idx]['category_id']
         gt = np.zeros([self.num_img])
         for i in range(self.num_img):
             if cat_id in self.gt_imgs[i]['categories']:
                 gt[i] = 1
+                #print(self.gt_imgs[i]['image_id'])
+        #print('number of gt images: %d for cat_id: %d'%(gt.sum(), cat_id))
         out = np.zeros([self.num_img]) #* np.inf    
         # map results to gt img
         for i in range(self.num_results):
             img_id = self.results[i]['image_id']
             gt_idx = self.gt_idxs[img_id]
-            out[gt_idx] = self.results[i]['category_score'][cat_idx]
+            out[gt_idx] = self.results[i]['category_score'][eval_order]
+  
         so = np.sort(-out)
         si = np.argsort(-out)
+
+                        
         tp = gt[si]==1
         fp = gt[si]==0
         fp = np.cumsum(fp)

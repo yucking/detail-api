@@ -26,7 +26,7 @@ import json
 import time
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
-from matplotlib.patches import Polygon,Rectangle,Circle,Arrow
+from matplotlib.patches import Polygon,Rectangle,Circle,Arrow,FancyArrow
 import matplotlib.colors
 import numpy as np
 import skimage.io as io
@@ -41,6 +41,14 @@ if PYTHON_VERSION == 2:
     from urllib import urlretrieve
 elif PYTHON_VERSION == 3:
     from urllib.request import urlretrieve
+
+# When displaying boundaries, dilate the mask before displaying it, to
+# improve visibility
+NUM_BOUNDARY_DILATION_ITERATIONS = 1
+
+# When displaying occlusion, draw an arrow every OCCLUSION_ARROW_DISTANCE
+# pixels
+OCCLUSION_ARROW_DISTANCE = 7
 
 class Detail:
     def __init__(self, annotation_file='json/trainval_withkeypoints.json',
@@ -65,6 +73,7 @@ class Detail:
         assert type(self.data)==dict, 'annotation file format {} not supported'.format(type(self.data))
         print('Done (t={:0.2f}s)'.format(time.time()- tic))
 
+        self.waiting = False
         self.__createIndex()
 
     def __createIndex(self):
@@ -95,18 +104,28 @@ class Detail:
             part['annotations'] = []
             part['images'] = []
             self.parts[part['part_id']] = part
-
-        for cat in self.data['categories']:
+            
+        # fixed eval_orders here for classification task
+        self.eval_orders = {}
+        eval_orders = [2, 23, 25, 31, 34, 45, 59, 65, 72, 98, 397, 113, 207, 258, 284, 308, 347, 368, 416, 427, 9, 18, 22, 33, 44, 46, 68, 80, 85, 104, 115, 144, 158, 159, 162, 187, 189, 220, 232, 259, 260, 105, 296, 355, 295, 324, 326, 349, 354, 360, 366, 19, 415, 420, 424, 440, 445, 454, 458]
+        for i in range(len(eval_orders)):
+            self.eval_orders[i] = eval_orders[i]
+        for order, cat in enumerate(self.data['categories']):
             cat['images'] = []
             cat['annotations'] = []
+            #print('adding cat id: %d'%(cat['category_id']))
             self.cats[cat['category_id']] = cat
+            # self.eval_orders[order] = cat['category_id']
             if cat.get('parts'):
                 for partId in cat['parts']:
                     part = self.parts[partId]
                     if cat['category_id'] not in part['categories']:
                         part['categories'].append(cat['category_id'])
 
-
+        #print('done show cats:')
+        #ids = sorted(self.cats.keys())
+        #for i, catsid in enumerate(ids):
+        #    self.cats_order[i] = catsid
         try: # I cannot run this code, maybe my data is out-of-date? -- Zhishuai
             assert(os.getlogin()=='zhishuaizhang')
         except: # I add this code to make my code running, and shouldn't affect other people
@@ -508,7 +527,7 @@ class Detail:
 
         if with_instances is not None:
             cats = [cat for cat in cats if not cat['onlysemantic'] == with_instances]
-
+        
         return cats
 
     def getSuperparts(self, cat=None):
@@ -613,6 +632,188 @@ class Detail:
                 imgs.remove(img)
 
         return imgs
+
+    # showX() functions #
+
+    def showImg(self, img, wait=False, ax=None):
+        """
+        Display the given image
+        """
+        img = self.getImgs(img)[0]
+        jpeg = io.imread(os.path.join(self.img_folder, img['file_name']))
+
+        # print image details
+        print('showing image %s: ' % img['file_name'])
+        keys = ['image_id', 'width', 'height', 'phase', 'date_captured']
+        for k in keys:
+            print('\t%s: %s,' % (k, img[k] if img.get(k) else 'N/A'))
+
+        if ax is not None:
+            ax.imshow(jpeg)
+        else:
+            plt.imshow(jpeg)
+
+        plt.axis('off')
+        if wait:
+            self.waiting = True
+        else:
+            plt.show()
+
+    def showMask(self, mask, img=None):
+        """
+        Display given mask (numpy 2D array) as a colormapped image.
+        """
+        if img is not None and not self.waiting:
+            self.showImg(img, wait=True)
+
+        # Draw mask, random colormap, 0s transparent
+        self.waiting = False
+        mycmap = self.__genRandColormap()
+        mycmap.set_under(alpha=0.0)
+        nonzero = np.unique(mask[np.nonzero(mask)])
+        plt.imshow(mask, cmap=mycmap, vmin=np.min(nonzero), vmax=np.max(nonzero)+1)
+        plt.axis('off')
+        plt.show()
+
+    def showBboxes(self, bboxes, img=None):
+        """
+        Display given bounding boxes.
+        """
+        fig,ax = plt.subplots(1)
+        if img is not None and not self.waiting:
+            self.showImg(img, wait=True, ax=ax)
+
+        for bbox in bboxes:
+            ax.add_patch(Rectangle((bbox['bbox'][0],bbox['bbox'][1]), bbox['bbox'][2], bbox['bbox'][3], linewidth=2,
+                                   edgecolor=np.random.rand(3), facecolor='none',
+                                   label=bbox['category']))
+        print('categories: %s' % [bbox['category'] for bbox in bboxes])
+
+        self.waiting = False
+        plt.legend()
+        plt.axis('off')
+        plt.show()
+
+    def showKpts(self, kpts, img=None):
+        """
+        Display given kpts.
+        """
+        fig,ax = plt.subplots(1)
+        if img is not None:
+            self.showImg(img, wait=True, ax=ax)
+
+        pv = np.zeros(14)
+        px = np.zeros(14)
+        py = np.zeros(14)
+        for kpt in kpts:
+            skeleton_color = np.random.rand(3)
+            num_kpt = len(kpt['keypoints'])/3 # always 14
+            assert num_kpt == 14, 'Expected 14 keypoints but found {}'.format(num_kpt)
+
+            for i in range(int(num_kpt)):
+                px[i] = kpt['keypoints'][3*i]
+                py[i] = kpt['keypoints'][3*i+1]
+                pv[i] = kpt['keypoints'][3*i+2]
+
+            kpt_pair = [[0, 1], [1, 2], [2, 3], [3, 4], [2, 5], [5, 6], [6, 7], [1, 8], [8, 9], [9, 10], [8, 11], [11, 12], [12, 13]]
+            for p in kpt_pair:
+                p0 = p[0]
+                p1 = p[1]
+                if pv[p0] == 0 or pv[p1] == 0:
+                    continue
+                if pv[p0] == 2 or pv[p1] == 2:
+                    pcolor = 'blue'
+                else:
+                    pcolor = 'red'
+                ax.add_patch(Arrow(px[p0], py[p0], px[p1]-px[p0], py[p1]-py[p0],
+                                   width=2.0, facecolor=skeleton_color,
+                                   edgecolor=skeleton_color))
+
+            for i in range(int(num_kpt)):
+                if pv[i] == 0:
+                    continue
+                pcolor = 'none'
+                if pv[i] == 1:
+                    pcolor = 'red'
+                else:
+                    pcolor = 'blue'
+                ax.add_patch(Circle((px[i], py[i]), radius=3, facecolor=pcolor,
+                                    edgecolor=skeleton_color, linewidth=2.0))
+
+        self.waiting = False
+        plt.axis('off')
+        plt.show()
+
+    def showBounds(self, mask, img):
+        """
+        Dilate mask before passing it to showMask()
+        """
+        img = self.getImgs(img)[0]
+
+        # dilate mask (creates new ndarray of bools)
+        mask = binary_dilation(mask, iterations=NUM_BOUNDARY_DILATION_ITERATIONS)
+
+        # show mask
+        self.showMask(mask, img)
+
+    def showOccl(self, occl, img):
+        """
+        Show occlusion data
+        """
+        img = self.getImgs(img)[0]
+
+        fig,ax = plt.subplots(1)
+        if img is not None and not self.waiting:
+            self.showImg(img, wait=True, ax=ax)
+
+        bounds = np.zeros(occl['imsize'])
+        for i in range(occl['ne']): # ne = "number of edges"
+
+            pixel_indices = occl['edges']['indices'][i]
+            num_pixels = len(pixel_indices)
+            pixel_coords = np.unravel_index(pixel_indices, occl['imsize'], order='F')
+            edgelabel = occl['edges']['edgelabel'][i]
+            bounds[pixel_coords] = 1
+
+            for j in range(num_pixels - OCCLUSION_ARROW_DISTANCE):
+                if j % OCCLUSION_ARROW_DISTANCE == 0:
+                    # draw arrow
+                    a = [pixel_coords[0][j]  , pixel_coords[1][j]]
+                    b = [pixel_coords[0][j+OCCLUSION_ARROW_DISTANCE],
+                         pixel_coords[1][j+OCCLUSION_ARROW_DISTANCE] ]
+
+                    # midpoint
+                    mid = (np.array(a) + np.array(b)) / 2
+
+                    d0 = b[0] - a[0]
+                    d1 = b[1] - a[1]
+
+                    # point towards b if edgelabel is 1,
+                    # else (edgelabel is 2), point away
+                    if edgelabel != 1:
+                        d0 *= -1
+                        d1 *= -1
+
+                    # normalize direction vector
+                    norm = np.sqrt(d0 * d0 + d1 * d1)
+                    d0 /= norm
+                    d1 /= norm
+
+                    ax.add_patch(FancyArrow(mid[1], mid[0], d0, -d1, width=0.0,
+                                            head_width=2.5, head_length = 5.0,
+                                            facecolor='white', edgecolor='none'))
+
+
+        # show mask
+        self.showMask(bounds, img)
+
+    # Helper functions #
+
+    def __toList(self, param):
+        return param if type(param) == list else [param]
+
+    def __genRandColormap(self):
+        return matplotlib.colors.ListedColormap(np.random.rand (256,3))
 
     def decodeMask(self, json):
         """
