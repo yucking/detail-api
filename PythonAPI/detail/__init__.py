@@ -6,7 +6,8 @@ __version__ = '4.0'
 # information about the PASCAL in Detail challenge. For example usage of the
 # detail API, see detailDemo.ipynb.
 
-# Throughout the API "ann"=annotation, "cat"=category, "img"=image, "kpts"=keypoints.
+# Throughout the API "ann"=annotation, "cat"=category, "img"=image,
+# "bbox"= bounding box, "kpts"=keypoints.
 
 # To import:
 # from detail import Detail
@@ -32,6 +33,7 @@ import numpy as np
 import skimage.io as io
 import copy
 import itertools
+from scipy.ndimage.morphology import binary_dilation
 from . import mask as maskUtils
 import os
 from collections import defaultdict
@@ -71,6 +73,7 @@ class Detail:
 
         self.data = json.load(open(annotation_file, 'r'))
         assert type(self.data)==dict, 'annotation file format {} not supported'.format(type(self.data))
+        print('JSON root keys:' + str(self.data.keys()))
         print('Done (t={:0.2f}s)'.format(time.time()- tic))
 
         self.waiting = False
@@ -82,22 +85,30 @@ class Detail:
         print('creating index...')
 
         # create class members
-        self.cats,self.imgs,self.segmentations,self.occlusion,self.parts,self.kpts= {},{},{},{},{},{}
+        self.cats,self.imgs,self.segmentations,self.occlusion,self.parts,\
+            self.kpts, self.bounds= {},{},{},{},{},{},{}
 
         # Organize data into instance variables
         for img in self.data['images']:
             self.imgs[img['image_id']] = img
-        for segm in self.data['annos_segmentation']:
+        for segm in self.data['annos_segmentation']:        # many per image
             self.segmentations[segm['id']] = segm
-        for occl in self.data['annos_occlusion']:
+        for occl in self.data['annos_occlusion']:           # one per image
             self.occlusion[occl['image_id']] = occl
+        for bound in self.data['annos_boundary']:           # one per image
+            self.bounds[bound['image_id']] = bound
+        for skeleton in self.data['annos_joints']:          # many per image
+            # skeletons are 1-indexed in JSON file and
+            # 0-indexed in self.kpts
+            self.kpts[skeleton['person_id'] - 1] = skeleton
+
 
         # Follow references
         for img in self.data['images']:
             img['annotations'] = []
             img['categories'] = []
             img['parts'] = []
-            img['keypoints'] = [] # for keypoint
+            img['keypoints'] = []
 
         for part in self.data['parts']:
             part['categories'] = []
@@ -122,6 +133,10 @@ class Detail:
                     if cat['category_id'] not in part['categories']:
                         part['categories'].append(cat['category_id'])
 
+
+        self.keypoints_str = ['head', 'neck', 'lsho', 'lelb', 'lhip', 'lwri', 'lknee', 'lank', 'rsho', 'relb', 'rwri', 'rhip', 'rknee', 'rank']
+        for skeleton_id, skeleton in self.kpts.items():
+             self.imgs[skeleton['image_id']]['keypoints'].append(skeleton_id)
         #print('done show cats:')
         #ids = sorted(self.cats.keys())
         #for i, catsid in enumerate(ids):
@@ -166,11 +181,7 @@ class Detail:
                     if part['part_id'] not in img['parts']:
                         img['parts'].append(part['part_id'])
 
-        for occl_id, occl in self.occlusion.items():
-            img = self.imgs[occl['image_id']]
-            img['annotations'].append(occl_id)
-
-        print('index created! {:0.2f}s'.format(time.time() - tic))
+        print('index created! (t={:0.2f}s)'.format(time.time() - tic))
 
     def info(self):
         """
@@ -179,9 +190,6 @@ class Detail:
         """
         for key, value in self.data['info'].items():
             print('{}: {}'.format(key, value))
-
-    #def getOccl(self, img, anns=[], show=False):
-        # TODO
 
     def __getSegmentationAnns(self, anns=[], imgs=[], cats=[], areaRng=[], supercat=None, crowd=None):
         """
@@ -228,6 +236,41 @@ class Detail:
                 anns = [ann for ann in anns if not ann['iscrowd']]
 
         return anns
+
+    # getX() functions #
+
+    #def getOccl(self, img, anns=[], show=False):
+        # TODO
+
+    def getBounds(self, img, show=False):
+        """
+        Get boundary mask for given image.
+        """
+        img = self.getImgs(img)[0]
+
+        bound = self.bounds[img['image_id']]
+        mask = self.decodeMask(bound['boundary_mask'])
+
+        if show:
+            if np.count_nonzero(mask) > 0:
+                self.showBounds(mask, img)
+            else:
+                print('Mask is empty')
+
+        return mask
+
+    def showBounds(self, mask, img):
+        """
+        Dilate mask before passing it to showMask()
+        """
+        img = self.getImgs(img)[0]
+
+        # dilate mask (creates new ndarray of bools)
+        mask = binary_dilation(mask, iterations=NUM_BOUNDARY_DILATION_ITERATIONS)
+
+        # show mask
+        self.showMask(mask, img)
+
 
     def getBboxes(self, img, cat='object', show=False):
         """
@@ -387,108 +430,14 @@ class Detail:
         :return: kpts (dict array)  : array of kpts dict in the img
         """
         img = self.getImgs(img)[0]
-        kpts = img['keypoints']
+        kpts = []
+        for skeleton_id in img['keypoints']:
+            kpts.append(self.kpts[skeleton_id])
+
         if show:
             self.showKpts(kpts, img)
 
-    def showImg(self, img, wait=False, ax=None):
-        """
-        Display the given image
-        """
-        img = self.getImgs(img)[0]
-        jpeg = io.imread(os.path.join(self.img_folder, img['file_name']))
-
-        # print image details
-        print('showing image %s: ' % img['file_name'])
-        keys = ['image_id', 'width', 'height', 'phase', 'date_captured']
-        for k in keys:
-            print('\t%s: %s,' % (k, img[k] if img.get(k) else 'N/A'))
-
-        if ax is not None:
-            ax.imshow(jpeg)
-        else:
-            plt.imshow(jpeg)
-
-        plt.axis('off')
-        if not wait:
-            plt.show()
-
-    def showMask(self, mask, img=None):
-        """
-        Display given mask (numpy 2D array) as a colormapped image.
-        """
-        if img is not None:
-            self.showImg(img, wait=True)
-
-        # Draw mask, random colormap, 0s transparent
-        mycmap = self.__genRandColormap()
-        mycmap.set_under(alpha=0.0)
-        nonzero = np.unique(mask[np.nonzero(mask)])
-        plt.imshow(mask, cmap=mycmap, vmin=np.min(nonzero), vmax=np.max(nonzero)+1)
-        plt.axis('off')
-        plt.show()
-
-    def __genRandColormap(self):
-        return matplotlib.colors.ListedColormap(np.random.rand (256,3))
-
-    def showBboxes(self, bboxes, img=None):
-        """
-        Display given bounding boxes.
-        """
-        fig,ax = plt.subplots(1)
-        if img is not None:
-            self.showImg(img, wait=True, ax=ax)
-
-        for bbox in bboxes:
-            ax.add_patch(Rectangle((bbox['bbox'][0],bbox['bbox'][1]), bbox['bbox'][2], bbox['bbox'][3], linewidth=2,
-                                   edgecolor=np.random.rand(3), facecolor='none'))
-        print('categories: %s' % [bbox['category'] for bbox in bboxes])
-
-        plt.axis('off')
-        plt.show()
-
-    def showKpts(self, kpts, img=None):
-        """
-        Display given kpts.
-        """
-        fig,ax = plt.subplots(1)
-        if img is not None:
-            self.showImg(img, wait=True, ax=ax)
-        pv = np.zeros(14)
-        px = np.zeros(14)
-        py = np.zeros(14)
-        for kpt in kpts:
-            num_kpt = len(kpt['keypoints'])/3
-            for i in range(int(num_kpt)):
-                px[i] = kpt['keypoints'][3*i]
-                py[i] = kpt['keypoints'][3*i+1]
-                pv[i] = kpt['keypoints'][3*i+2]
-                if pv[i] == 0:
-                    continue
-                pcolor = 'none'
-                if pv[i] == 1:
-                    pcolor = 'red'
-                else:
-                    pcolor = 'blue'
-                ax.add_patch(Circle((px[i], py[i]), radius=3, facecolor=pcolor))
-            kpt_pair = [[0, 1], [1, 2], [2, 3], [3, 4], [2, 5], [5, 6], [6, 7], [1, 8], [8, 9], [9, 10], [8, 11], [11, 12], [12, 13]]
-            for p in kpt_pair:
-                p0 = p[0]
-                p1 = p[1]
-                if pv[p0] == 0 or pv[p1] == 0:
-                    continue
-                if pv[p0] == 2 or pv[p1] == 2:
-                    pcolor = 'blue'
-                else:
-                    pcolor = 'red'
-                ax.add_patch(Arrow(px[p0], py[p0], px[p1]-px[p0], py[p1]-py[p0], width=2.0, facecolor=pcolor))
-
-        plt.axis('off')
-        plt.show()
-
-
-    def __toList(self, param):
-        return param if type(param) == list else [param]
+        return kpts
 
     def getCats(self, cats=[], imgs=[], supercat=None, with_instances=None):
         """
