@@ -21,6 +21,8 @@ JSON_REGEX='trainval_.*'
 progress = None
 json_regex = re.compile(JSON_REGEX)
 
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
 def input23(prompt):
     """
     Calls raw_input() if python 2, input() if python 3
@@ -39,14 +41,18 @@ def printProgress(count, blockSize, totalSize):
 
     prev_progress = progress
     progress = int(float(count * blockSize) / totalSize * 100)
-    if progress > prev_progress:
+
+    # For some reason, when the file doesn't exist on the server,
+    # printProgress gets called where progress > 100.
+    # We don't print anything in this case.
+    if progress > prev_progress and progress <= 100:
         print("Download %d%% complete." % progress)
 
 
 if len(sys.argv) < 3 or sys.argv[1] == '-h' or sys.argv[1] == '--help':
-    print("usage: python download.py <dataset> <folder>\n" \
-          + "Download PASCAL in Detail data to <folder>.\n" \
-          + "<dataset> options: 'pascal' to download VOCdevkit,\n"
+    print("Usage: python download.py <dataset> <folder>\n" \
+          + "Downloads PASCAL in Detail data to <folder>.\n" \
+          + "<dataset> options: 'pascal' to download VOCdevkit,"
           + "trainval_preview1 to download trainval_preview1.json.")
     exit(1)
 
@@ -127,7 +133,12 @@ elif json_regex.match(sys.argv[1].lower()):
     print("Downloading %s to %s from:\n%s" % (filename, filepath, url))
 
     urlretrieve(url, filepath + '.download', reporthook=printProgress)
-    os.rename(filepath + '.download', filepath)
-    print("Download complete!")
+
+    if progress > 100:
+        os.remove(filepath + '.download')
+        print("Dataset doesn't exist. Aborting download.")
+    else:
+        os.rename(filepath + '.download', filepath)
+        print("Download complete!")
 else:
     print('Don\'t recognize dataset %s' % sys.argv[1].lower())

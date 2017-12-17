@@ -5,17 +5,17 @@ __version__ = '4.0'
 # in Detail. Please visit https://sites.google.com/view/pasd/home for more
 # information about the PASCAL in Detail challenge. For example usage of the
 # detail API, see detailDemo.ipynb.
-
+#
 # Throughout the API "ann"=annotation, "cat"=category, "img"=image,
 # "bbox"= bounding box, "kpts"=keypoints, "occl"=occlusion,
 # "bounds"=boundaries.
-
+#
 # To import:
 # from detail import Detail
-
+#
 # For help:
 # help(Detail)
-
+#
 # PASCAL in Detail Toolbox     version 4.0
 # Modifications of COCO toolbox made by Matt Richard and Zhuotun Zhu
 # Forked from:
